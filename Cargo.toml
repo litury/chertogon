@@ -1,0 +1,19 @@
+[package]
+name = "chertogon"
+version = "0.1.0"
+edition = "2021"
+description = "3D top-down roguelike arena shooter on Bevy"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+bevy = { version = "0.18", features = ["dynamic_linking", "jpeg", "exr"] }
+avian3d = { version = "0.6.0-rc.1", features = ["f32"] }
+bevy-inspector-egui = "0.36"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = true
+codegen-units = 1
