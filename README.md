@@ -1,5 +1,9 @@
 # ЧЕРТОГОН / Chertogon
 
+[![CI](https://github.com/litury/chertogon/actions/workflows/ci.yml/badge.svg)](https://github.com/litury/chertogon/actions)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
+[![Bevy](https://img.shields.io/badge/Bevy-0.18-232326?logo=bevy&logoColor=white)](https://bevyengine.org)
+
 3D top-down roguelike arena shooter на [Bevy 0.18](https://bevyengine.org/).
 Gothic Slavic dark fantasy, вдохновлённый Vampire Survivors, но в полном 3D.
 
@@ -29,7 +33,7 @@ Gothic Slavic dark fantasy, вдохновлённый Vampire Survivors, но �
 
 ```bash
 # Клонировать репозиторий
-git clone https://github.com/USERNAME/chertogon.git
+git clone https://github.com/litury/chertogon.git
 cd chertogon
 
 # Запуск (первая компиляция займёт несколько минут)
