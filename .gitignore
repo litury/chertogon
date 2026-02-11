@@ -1,5 +1,6 @@
 /doc
 /reference_images/
+assets/models/_originals/
 /target/
 **/*.rs.bk
 *.pdb

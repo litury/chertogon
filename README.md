@@ -1,6 +1,5 @@
 # ЧЕРТОГОН / Chertogon
 
-[![CI](https://github.com/litury/chertogon/actions/workflows/ci.yml/badge.svg)](https://github.com/litury/chertogon/actions)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 [![Bevy](https://img.shields.io/badge/Bevy-0.18-232326?logo=bevy&logoColor=white)](https://bevyengine.org)
 
