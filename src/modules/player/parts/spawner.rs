@@ -3,6 +3,7 @@ use std::time::Duration;
 use avian3d::prelude::*;  // ✅ Добавляем импорт физики (RigidBody, Collider)
 use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete};
 use crate::modules::combat::components::{Weapon, AttackCooldown, PlayerHealth};
+use crate::modules::world::GroundCircle;
 use crate::toolkit::asset_paths;
 
 /// Временный компонент для передачи индексов анимаций от spawn к setup
@@ -19,6 +20,8 @@ pub fn spawn_player(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     info!("🎮 Spawning player with animations from {}", asset_paths::BOGATYR_MODEL);
 
@@ -87,10 +90,49 @@ pub fn spawn_player(
         AnimationGraphHandle(graph_handle),
     )).id();
 
+    // Ground ring — золотая HP-дуга (как в Hades/Diablo)
+    let ring_mesh = meshes.add(Annulus::new(0.65, 0.8)); // Будет заменён на arc в первом кадре
+    let ring_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.8, 0.3, 0.5),
+        emissive: LinearRgba::new(1.0, 0.7, 0.2, 0.0) * 2.0,
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    });
+    let ground_circle = commands.spawn((
+        Mesh3d(ring_mesh),
+        MeshMaterial3d(ring_material.clone()),
+        Transform::from_xyz(0.0, -0.89, 0.0)
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        GroundCircle {
+            inner_radius: 0.65,
+            outer_radius: 0.8,
+            base_alpha: 0.5,
+            pulse_speed: 2.5,
+            material_handle: ring_material,
+            last_hp_fraction: -1.0, // Невозможное значение → обновится в первом кадре
+            last_facing: 0.0,
+        },
+    )).id();
+
+    // Point light — тёплый свет вокруг игрока для контраста с тёмным полом
+    let player_light = commands.spawn((
+        PointLight {
+            color: Color::srgb(1.0, 0.85, 0.6),
+            intensity: 50_000.0,
+            range: 8.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 1.0, 0.0),
+    )).id();
+
     // Связываем parent-child
     commands.entity(player_entity).add_child(model_child);
+    commands.entity(player_entity).add_child(ground_circle);
+    commands.entity(player_entity).add_child(player_light);
 
-    info!("✅ Created Player entity with PlayerModel child");
+    info!("✅ Created Player entity with PlayerModel child + ground circle + light");
 }
 
 /// Система настройки AnimationPlayer после загрузки GLB

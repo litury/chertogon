@@ -1,6 +1,6 @@
 pub mod plugin;
 pub mod components;
-mod parts;
+pub(crate) mod parts;
 
 pub use plugin::PlayerPlugin;
-pub use components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete};
+pub use components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete, WeaponModel, WeaponAttachmentComplete};

@@ -1,3 +1,5 @@
 pub(super) mod spawner;
-pub(super) mod movement;
+pub(crate) mod movement;
 pub(super) mod animation;
+pub(super) mod cleanup;
+pub(super) mod weapon_attachment;
