@@ -20,5 +20,11 @@ desktop.ini
 *.blend
 *.blend1
 
+# Backup/working asset files
+*_backup.glb
+*_old.glb
+*_raw.glb
+*_reference.png
+
 .env
 .env.local
