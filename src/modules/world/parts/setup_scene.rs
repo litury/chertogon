@@ -2,6 +2,10 @@ use bevy::prelude::*;
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::VertexAttributeValues;
 use avian3d::prelude::*;
+use bevy_firework::core::*;
+use bevy_firework::curve::*;
+use bevy_firework::emission_shape::EmissionShape;
+use bevy_utilitarian::prelude::*;
 use crate::toolkit::asset_paths;
 use super::torch_flicker::TorchFlicker;
 
@@ -22,10 +26,10 @@ pub fn setup_scene(
         Transform::from_xyz(10.0, 20.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Global Ambient Light (мрачная Gothic атмосфера, по дизайн-доку)
+    // Global Ambient Light (Gothic атмосфера с достаточной читаемостью персонажей)
     commands.insert_resource(GlobalAmbientLight {
-        color: Color::srgb(0.25, 0.25, 0.3),
-        brightness: 80.0,
+        color: Color::srgb(0.3, 0.3, 0.35),
+        brightness: 150.0,
         ..default()
     });
 
@@ -64,7 +68,7 @@ pub fn setup_scene(
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
         RigidBody::Static,
-        Collider::cuboid(25.0, 0.01, 25.0),
+        Collider::cuboid(50.0, 0.01, 50.0),
         crate::shared::GameLayer::static_layers(),
     ));
 
@@ -131,25 +135,77 @@ pub fn setup_scene(
         ));
     }
 
-    // === ФАКЕЛЫ: 4 PointLight + 3D модель + мерцание огня ===
-    // Прижаты к стенам, повёрнуты лицом внутрь арены
+    // === ФАКЕЛЫ: 3D модель + частицы огня + PointLight ===
     let torch_scene = asset_server.load(asset_paths::TORCH);
 
     // (позиция на стене, поворот модели лицом внутрь)
     let torches: [(Vec3, f32); 4] = [
-        (Vec3::new(-23.0, 3.0, -half), 0.0),                        // SW → южная стена, лицом Z+
-        (Vec3::new(23.0, 3.0, -half), 0.0),                         // SE → южная стена, лицом Z+
-        (Vec3::new(-23.0, 3.0, half), std::f32::consts::PI),        // NW → северная стена, лицом Z-
-        (Vec3::new(23.0, 3.0, half), std::f32::consts::PI),         // NE → северная стена, лицом Z-
+        (Vec3::new(-23.0, 3.0, -half), 0.0),
+        (Vec3::new(23.0, 3.0, -half), 0.0),
+        (Vec3::new(-23.0, 3.0, half), std::f32::consts::PI),
+        (Vec3::new(23.0, 3.0, half), std::f32::consts::PI),
     ];
 
     for (i, (pos, angle)) in torches.iter().enumerate() {
-        let torch_entity = commands.spawn((
+        // Parent: позиция на стене
+        let torch_parent = commands.spawn(
+            Transform::from_translation(*pos),
+        ).id();
+
+        // Child 1: 3D модель факела (палка/кронштейн, без огня)
+        let model = commands.spawn((
+            SceneRoot(torch_scene.clone()),
+            Transform::from_xyz(0.0, -0.5, 0.0)
+                .with_scale(Vec3::splat(0.8))
+                .with_rotation(Quat::from_rotation_y(*angle)),
+        )).id();
+
+        // Child 2: частицы огня + PointLight + мерцание (наверху факела)
+        let fire = commands.spawn((
+            ParticleSpawner {
+                particle_settings: vec![ParticleSettings {
+                    lifetime: RandF32 { min: 0.3, max: 0.8 },
+                    initial_scale: RandF32 { min: 0.03, max: 0.1 },
+                    scale_curve: FireworkCurve::uneven_samples(vec![
+                        (0.0, 0.8), (0.2, 1.2), (1.0, 0.0),
+                    ]),
+                    acceleration: Vec3::new(0., 2.0, 0.),
+                    linear_drag: 1.5,
+                    base_color: FireworkGradient::uneven_samples(vec![
+                        (0.0, LinearRgba::new(50., 40., 5., 1.0)),
+                        (0.3, LinearRgba::new(10., 5., 0.5, 0.9)),
+                        (0.6, LinearRgba::new(3., 0.8, 0.1, 0.7)),
+                        (0.8, LinearRgba::new(1., 0.2, 0.05, 0.4)),
+                        (1.0, LinearRgba::new(0.2, 0.1, 0.1, 0.0)),
+                    ]),
+                    emissive_color: FireworkGradient::uneven_samples(vec![
+                        (0.0, LinearRgba::new(30., 20., 2., 1.0)),
+                        (0.5, LinearRgba::new(5., 1., 0.1, 1.0)),
+                        (1.0, LinearRgba::BLACK),
+                    ]),
+                    blend_mode: BlendMode::Add,
+                    fade_edge: 0.8,
+                    pbr: false,
+                    ..default()
+                }],
+                emission_settings: vec![EmissionSettings {
+                    emission_pacing: EmissionPacing::rate(300.),
+                    emission_shape: EmissionShape::Sphere(0.12),
+                    initial_velocity: RandVec3 {
+                        magnitude: RandF32 { min: 0.2, max: 1.0 },
+                        direction: Vec3::Y,
+                        spread: 45_f32.to_radians(),
+                    },
+                    initial_velocity_radial: RandF32 { min: 0.1, max: 0.5 },
+                    ..default()
+                }],
+                ..default()
+            },
             PointLight {
                 color: Color::srgb(1.0, 0.6, 0.2),
                 intensity: 200_000.0,
                 range: 15.0,
-                shadows_enabled: true,
+                shadows_enabled: false,
                 ..default()
             },
             TorchFlicker {
@@ -158,18 +214,10 @@ pub fn setup_scene(
                 speed: 4.0,
                 phase: i as f32 * 1.5,
             },
-            Transform::from_translation(*pos),
+            Transform::from_xyz(0.0, -0.1, 0.0),
         )).id();
 
-        // Child: визуальная модель факела, повёрнута лицом внутрь арены
-        let model = commands.spawn((
-            SceneRoot(torch_scene.clone()),
-            Transform::from_xyz(0.0, -0.5, 0.0)
-                .with_scale(Vec3::splat(0.8))
-                .with_rotation(Quat::from_rotation_y(*angle)),
-        )).id();
-
-        commands.entity(torch_entity).add_child(model);
+        commands.entity(torch_parent).add_children(&[model, fire]);
     }
 
     info!("✅ Arena setup complete: 50x50m with walls, torches, Gothic lighting");
