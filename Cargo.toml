@@ -10,6 +10,13 @@ readme = "README.md"
 bevy = { version = "0.18", features = ["dynamic_linking", "jpeg", "exr"] }
 avian3d = { version = "0.6.0-rc.1", features = ["f32"] }
 bevy-inspector-egui = "0.36"
+bevy_firework = { version = "0.9", default-features = false }
+bevy_utilitarian = "0.9"
+
+[features]
+default = []
+webgpu = ["bevy/webgpu"]
+remote_debug = ["bevy/bevy_remote"]
 
 [profile.dev]
 opt-level = 1
