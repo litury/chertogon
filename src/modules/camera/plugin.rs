@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use super::parts::{setup, follow_system};
+use crate::shared::GameState;
+use crate::modules::player::parts::movement::player_movement_system;
+use super::parts::{setup, follow_system, menu_camera};
 use super::components::CameraZoom;
 
 pub struct CameraPlugin;
@@ -12,6 +14,10 @@ impl Plugin for CameraPlugin {
             .add_systems(Update, (
                 follow_system::camera_zoom_system,
                 follow_system::follow_player_system,
-            ).chain());
+            ).chain()
+                .after(player_movement_system)
+                .run_if(in_state(GameState::Playing)))
+            .add_systems(Update, menu_camera::menu_camera_orbit_system
+                .run_if(in_state(GameState::TitleScreen)));
     }
 }
