@@ -2,6 +2,10 @@ use bevy::prelude::*;
 use avian3d::prelude::*;
 use crate::modules::player::components::Player;
 use crate::modules::enemies::components::*;
+use crate::modules::combat::components::EnemyAttackCooldown;
+use crate::modules::combat::parts::knockback::Staggered;
+use crate::modules::world::GroundCircle;
+use crate::modules::combat::parts::game_over::KillCount;
 
 /// Система AI: враги реагируют на игрока по дистанции
 /// - Далеко (> aggro_range): стоит на месте (Idle)
@@ -11,7 +15,7 @@ pub fn enemy_ai_system(
     time: Res<Time>,
     mut enemies: Query<
         (&ChasePlayer, &Children, &Transform, &mut LinearVelocity, &mut EnemyAnimState),
-        (With<Enemy>, Without<Player>, Without<EnemyDying>)
+        (With<Enemy>, Without<Player>, Without<EnemyDying>, Without<Staggered>)
     >,
     player: Query<&Transform, With<Player>>,
     mut model_query: Query<&mut Transform, (With<EnemyModel>, Without<Enemy>, Without<Player>)>,
@@ -67,15 +71,26 @@ pub fn enemy_ai_system(
 pub fn start_enemy_death(
     mut commands: Commands,
     mut enemies: Query<
-        (Entity, &Health, &mut EnemyAnimState, &mut LinearVelocity),
+        (Entity, &Health, &Children, &mut EnemyAnimState, &mut LinearVelocity),
         (With<Enemy>, Without<EnemyDying>)
     >,
+    ground_circles: Query<Entity, With<GroundCircle>>,
+    mut kill_count: ResMut<KillCount>,
 ) {
-    for (entity, health, mut anim_state, mut velocity) in &mut enemies {
+    for (entity, health, children, mut anim_state, mut velocity) in &mut enemies {
         if health.is_dead() {
-            info!("💀 Enemy dying — playing death animation");
+            kill_count.total += 1;
+            info!("💀 Enemy dying — playing death animation (kills: {})", kill_count.total);
             anim_state.current = EnemyAnim::Dying;
             velocity.0 = Vec3::ZERO;
+
+            // Деспавним ground circle при смерти
+            for child in children.iter() {
+                if ground_circles.get(child).is_ok() {
+                    commands.entity(child).despawn();
+                }
+            }
+
             commands.entity(entity)
                 .insert(EnemyDying {
                     timer: Timer::from_seconds(3.0, TimerMode::Once),
@@ -86,6 +101,26 @@ pub fn start_enemy_death(
                 .remove::<LinearVelocity>()
                 .remove::<LinearDamping>()
                 .remove::<AngularDamping>();
+        }
+    }
+}
+
+/// Тикает таймер смерти, после завершения — замораживает как статичный труп
+pub fn process_dying_enemies(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut dying: Query<(Entity, &mut EnemyDying), With<Enemy>>,
+) {
+    for (entity, mut dying) in &mut dying {
+        dying.timer.tick(time.delta());
+        if dying.timer.is_finished() {
+            commands.entity(entity)
+                .remove::<EnemyDying>()
+                .remove::<EnemyAnimState>()
+                .remove::<Health>()
+                .remove::<EnemyAttackCooldown>()
+                .remove::<Enemy>()
+                .insert(EnemyCorpse);
         }
     }
 }

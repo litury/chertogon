@@ -1,24 +1,30 @@
 use bevy::prelude::*;
-use crate::modules::enemies::parts::{spawner, ai, animation};
+use crate::shared::GameState;
+use crate::modules::enemies::parts::{spawner, ai, animation, cleanup};
+use crate::modules::enemies::components::WaveState;
 
 pub struct EnemiesPlugin;
 
 impl Plugin for EnemiesPlugin {
     fn build(&self, app: &mut App) {
         app
-            // Спавн тестового врага при старте
-            .add_systems(Startup, spawner::spawn_test_enemy)
-            // AI → Death → Animation (строгий порядок через chain)
+            .init_resource::<WaveState>()
+            .add_systems(OnEnter(GameState::Playing), (
+                cleanup::despawn_enemies,
+                cleanup::reset_wave_state,
+                cleanup::reset_kill_count,
+            ).chain())
+            .add_systems(Update, spawner::wave_spawner_system
+                .run_if(in_state(GameState::Playing)))
             .add_systems(Update, (
                 ai::enemy_ai_system,
                 ai::start_enemy_death,
+                ai::process_dying_enemies,
                 animation::enemy_animation_state_system,
-            ).chain())
-            // Независимые системы
-            .add_systems(Update, (
-                animation::setup_enemy_animation,
-            ));
+            ).chain().run_if(in_state(GameState::Playing)))
+            .add_systems(Update, animation::setup_enemy_animation
+                .run_if(in_state(GameState::Playing)));
 
-        info!("👾 EnemiesPlugin loaded (with animations)");
+        info!("👾 EnemiesPlugin loaded (wave system + animations)");
     }
 }

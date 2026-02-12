@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 
 /// Маркер компонент для врага
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Enemy;
 
 /// Здоровье врага
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Health {
     pub current: f32,
     pub max: f32,
@@ -29,13 +31,15 @@ impl Health {
 }
 
 /// Тип врага
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Reflect)]
+#[reflect(Component)]
 pub enum EnemyType {
     Upyr,   // Упырь — славянский зомби (MVP)
 }
 
 /// Маркер для визуальной модели врага (child entity)
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct EnemyModel;
 
 /// Индексы анимаций врага в AnimationGraph
@@ -48,16 +52,18 @@ pub struct EnemyAnimations {
 }
 
 /// Маркер завершения настройки анимаций врага
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct EnemyAnimationSetupComplete;
 
 /// Состояние анимации врага
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct EnemyAnimState {
     pub current: EnemyAnim,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect)]
 pub enum EnemyAnim {
     Idle,
     Walking,
@@ -66,13 +72,20 @@ pub enum EnemyAnim {
 }
 
 /// Маркер умирающего врага (проигрывает death анимацию перед despawn)
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct EnemyDying {
     pub timer: Timer,
 }
 
+/// Маркер трупа врага (статичный визуальный объект после death-анимации)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct EnemyCorpse;
+
 /// AI врага: преследование + агро-зона + атака
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct ChasePlayer {
     pub speed: f32,
     pub aggro_range: f32,
@@ -83,8 +96,40 @@ impl Default for ChasePlayer {
     fn default() -> Self {
         Self {
             speed: 3.0,
-            aggro_range: 12.0,
+            aggro_range: 30.0,
             attack_range: 2.0,
+        }
+    }
+}
+
+/// Фаза волны
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WavePhase {
+    Spawning,   // спавним врагов по одному
+    Fighting,   // все заспавнены, ждём пока убьют
+    Cooldown,   // пауза перед следующей волной
+}
+
+/// Состояние волновой системы спавна
+#[derive(Resource)]
+pub struct WaveState {
+    pub current_wave: u32,
+    pub enemies_to_spawn: u32,
+    pub spawn_timer: Timer,
+    pub wave_cooldown: Timer,
+    pub phase: WavePhase,
+}
+
+impl Default for WaveState {
+    fn default() -> Self {
+        let mut cooldown = Timer::from_seconds(1.0, TimerMode::Once);
+        cooldown.finish(); // Первая волна стартует сразу
+        Self {
+            current_wave: 0,
+            enemies_to_spawn: 0,
+            spawn_timer: Timer::from_seconds(0.8, TimerMode::Repeating),
+            wave_cooldown: cooldown,
+            phase: WavePhase::Cooldown,
         }
     }
 }
