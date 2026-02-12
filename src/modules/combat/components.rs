@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 /// Оружие игрока (автоатака à la Vampire Survivors)
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Weapon {
     pub damage: f32,
     pub range: f32,
@@ -19,7 +20,8 @@ impl Default for Weapon {
 }
 
 /// Таймер перезарядки автоатаки
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct AttackCooldown {
     pub timer: Timer,
 }
@@ -33,13 +35,15 @@ impl AttackCooldown {
 }
 
 /// Таймер длительности анимации атаки (для сброса обратно в idle/walk)
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct AttackAnimTimer {
     pub timer: Timer,
 }
 
 /// HP игрока
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct PlayerHealth {
     pub current: f32,
     pub max: f32,
@@ -59,8 +63,19 @@ impl PlayerHealth {
     }
 }
 
+/// Отложенный удар — урон наносится при ударе анимации, а не в начале замаха
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PendingAttack {
+    pub target: Entity,
+    pub damage: f32,
+    pub direction: Vec3,
+    pub timer: Timer,
+}
+
 /// Таймер контактного урона врага (чтобы не бил каждый кадр)
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct EnemyAttackCooldown {
     pub timer: Timer,
     pub damage: f32,

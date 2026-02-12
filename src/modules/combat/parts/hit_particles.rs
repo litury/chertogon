@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 /// Маркер частицы попадания
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct HitParticle {
     pub velocity: Vec3,
     pub timer: Timer,

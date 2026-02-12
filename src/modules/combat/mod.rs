@@ -5,3 +5,4 @@ pub(crate) mod parts;
 pub use plugin::CombatPlugin;
 pub use components::{Weapon, AttackCooldown, PlayerHealth, EnemyAttackCooldown};
 pub use parts::camera_shake::CameraShake;
+pub use parts::game_over::KillCount;
