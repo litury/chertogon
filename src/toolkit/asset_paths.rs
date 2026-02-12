@@ -28,3 +28,15 @@ pub const TORCH: &str = "models/environment/torch.glb#Scene0";
 pub const FLOOR_DIFF: &str = "textures/stone_floor_diff.jpg";
 pub const FLOOR_NORMAL: &str = "textures/stone_floor_nor.jpg";
 pub const FLOOR_ROUGH: &str = "textures/stone_floor_rough.jpg";
+
+// Оружие
+pub const SWORD_MODEL: &str = "models/weapons/runic_sword.glb#Scene0";
+
+// UI фоны
+pub const TITLE_BG: &str = "textures/ui/title_bg.jpg";
+pub const GAMEOVER_BG: &str = "textures/ui/gameover_bg.jpg";
+
+// Шрифты (Google Fonts, OFL)
+pub const FONT_TITLE: &str = "fonts/RuslanDisplay-Regular.ttf";      // Ruslan Display — заголовки (полуустав XVI век)
+pub const FONT_UI: &str = "fonts/CormorantGaramond-Regular.otf";     // Cormorant Garamond — HUD/текст
+pub const FONT_UI_BOLD: &str = "fonts/CormorantGaramond-Bold.otf";   // Cormorant Garamond Bold — кнопки
