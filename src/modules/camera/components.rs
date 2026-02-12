@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use crate::shared::constants::CAMERA_ZOOM_DEFAULT;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct CameraTarget;
 
 /// Resource для хранения текущего расстояния зума камеры
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub struct CameraZoom {
     pub current_distance: f32,  // Текущее расстояние
     pub target_distance: f32,   // Целевое расстояние
