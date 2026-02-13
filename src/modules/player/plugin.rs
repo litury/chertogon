@@ -17,6 +17,7 @@ impl Plugin for PlayerPlugin {
                 weapon_attachment::attach_weapon_to_hand,
                 movement::player_movement_system,
                 animation::animation_state_system,
+                animation::player_hit_stagger_system,
             ).run_if(in_state(GameState::Playing)));
     }
 }

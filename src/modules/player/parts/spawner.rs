@@ -14,6 +14,7 @@ pub struct AnimationIndices {
     walk: AnimationNodeIndex,
     run: AnimationNodeIndex,
     attack: AnimationNodeIndex,
+    hit: AnimationNodeIndex,
 }
 
 pub fn spawn_player(
@@ -36,21 +37,24 @@ pub fn spawn_player(
     let walk_handle = asset_server.load(asset_paths::ANIM_WALK);
     let run_handle = asset_server.load(asset_paths::ANIM_RUN);
     let attack_handle = asset_server.load(asset_paths::ANIM_ATTACK);
+    let hit_handle = asset_server.load(asset_paths::ANIM_HIT);
 
     // Добавляем каждую анимацию в граф и получаем индексы
     let idle_index = animation_graph.add_clip(idle_handle, 1.0, animation_graph.root);
     let walk_index = animation_graph.add_clip(walk_handle, 1.0, animation_graph.root);
     let run_index = animation_graph.add_clip(run_handle, 1.0, animation_graph.root);
     let attack_index = animation_graph.add_clip(attack_handle, 1.0, animation_graph.root);
+    let hit_index = animation_graph.add_clip(hit_handle, 1.0, animation_graph.root);
 
     // Сохраняем граф
     let graph_handle = graphs.add(animation_graph);
 
-    info!("📊 AnimationGraph created with 4 animation nodes");
+    info!("📊 AnimationGraph created with 5 animation nodes");
     info!("  - Idle: {}", asset_paths::ANIM_IDLE);
     info!("  - Walk: {}", asset_paths::ANIM_WALK);
     info!("  - Run: {}", asset_paths::ANIM_RUN);
     info!("  - Attack: {}", asset_paths::ANIM_ATTACK);
+    info!("  - Hit: {}", asset_paths::ANIM_HIT);
 
     // Создаем ЛОГИЧЕСКИЙ Player entity (без mesh) + ФИЗИКА
     let player_entity = commands.spawn((
@@ -86,6 +90,7 @@ pub fn spawn_player(
             walk: walk_index,
             run: run_index,
             attack: attack_index,
+            hit: hit_index,
         },
         AnimationGraphHandle(graph_handle),
     )).id();
@@ -164,6 +169,7 @@ pub fn setup_scene_animation(
                         walk: anim_indices.walk,
                         run: anim_indices.run,
                         attack: anim_indices.attack,
+                        hit: anim_indices.hit,
                     };
 
                     // Добавляем компоненты ТОЛЬКО к AnimationPlayer entity

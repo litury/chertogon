@@ -18,6 +18,7 @@ pub enum AnimationState {
     Walking,
     Running,
     Attacking,
+    HitReaction,
 }
 
 /// Компонент для хранения индексов нод анимаций в графе
@@ -28,6 +29,7 @@ pub struct PlayerAnimations {
     pub walk: AnimationNodeIndex,
     pub run: AnimationNodeIndex,
     pub attack: AnimationNodeIndex,
+    pub hit: AnimationNodeIndex,
 }
 
 /// Маркер для визуальной модели игрока (child entity)
@@ -40,6 +42,16 @@ pub struct PlayerModel;
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct AnimationSetupComplete;
+
+/// Таймер стаггера при получении урона (блокирует ввод, играет hit анимацию)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PlayerHitStagger {
+    pub timer: Timer,
+    /// Emissive уже выставлен (set-once оптимизация)
+    #[reflect(ignore)]
+    pub emissive_applied: bool,
+}
 
 /// Маркер для entity оружия (child кости RightHand)
 #[derive(Component, Reflect)]

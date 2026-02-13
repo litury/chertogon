@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use std::time::Duration;
 use crate::modules::{Player, AnimatedCharacter, InputState};
-use crate::modules::player::components::{AnimationState, PlayerAnimations};
+use crate::modules::player::components::{AnimationState, PlayerAnimations, PlayerHitStagger, PlayerModel};
 use crate::modules::player::AnimationSetupComplete;
+use crate::modules::combat::components::AttackCooldown;
 
 // Пороги для предотвращения мерцания (hysteresis)
 const MOVEMENT_START_THRESHOLD: f32 = 0.05;  // Начать движение
@@ -14,24 +15,22 @@ pub fn animation_state_system(
     mut player: Query<&mut AnimatedCharacter, With<Player>>,
     mut animation_query: Query<
         (&PlayerAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
-        With<AnimationSetupComplete>  // Только initialized players
+        With<AnimationSetupComplete>
     >,
 ) {
     if let Ok(mut character) = player.single_mut() {
         if let Ok((animations, mut anim_player, mut transitions)) = animation_query.single_mut() {
-            // Определяем новое состояние с hysteresis
             let movement_magnitude = input_state.movement.length();
             let current_state = character.current_animation;
 
-            // Не прерываем атаку движением — атака доиграет сама
-            if current_state == AnimationState::Attacking {
+            // Не прерываем атаку или hit reaction движением
+            if current_state == AnimationState::Attacking || current_state == AnimationState::HitReaction {
                 return;
             }
 
-            // Hysteresis: разные пороги для начала и остановки
             let movement_threshold = match current_state {
-                AnimationState::Idle => MOVEMENT_START_THRESHOLD,  // Нужно >0.05 чтобы начать
-                _ => MOVEMENT_STOP_THRESHOLD,  // Нужно <0.02 чтобы остановиться
+                AnimationState::Idle => MOVEMENT_START_THRESHOLD,
+                _ => MOVEMENT_STOP_THRESHOLD,
             };
 
             let new_state = if movement_magnitude > movement_threshold {
@@ -44,37 +43,90 @@ pub fn animation_state_system(
                 AnimationState::Idle
             };
 
-            // Переключаем ТОЛЬКО при изменении
             if character.current_animation != new_state {
-                // Обновляем состояние
                 character.current_animation = new_state;
 
-                // Выбираем анимацию
                 let animation_index = match new_state {
-                    AnimationState::Idle => {
-                        info!("🧍 Switching to Idle animation");
-                        animations.idle
-                    },
-                    AnimationState::Walking => {
-                        info!("🚶 Switching to Walking animation");
-                        animations.walk
-                    },
-                    AnimationState::Running => {
-                        info!("🏃 Switching to Running animation");
-                        animations.run
-                    },
-                    AnimationState::Attacking => {
-                        info!("⚔️ Switching to Attack animation");
-                        animations.attack
-                    },
+                    AnimationState::Idle => animations.idle,
+                    AnimationState::Walking => animations.walk,
+                    AnimationState::Running => animations.run,
+                    AnimationState::Attacking => animations.attack,
+                    AnimationState::HitReaction => animations.hit,
                 };
 
-                // Плавный переход через AnimationTransitions (0.2 секунды)
-                // Атака проигрывается один раз, остальные зацикливаются
                 let transition = transitions
                     .play(&mut anim_player, animation_index, Duration::from_millis(200));
-                if new_state != AnimationState::Attacking {
+                if new_state != AnimationState::Attacking && new_state != AnimationState::HitReaction {
                     transition.repeat();
+                }
+            }
+        }
+    }
+}
+
+/// Diablo 4 Hit Recovery:
+/// 1. Тикает таймер стаггера (0.3s)
+/// 2. Emissive glow — set-once в начале, сброс в конце
+/// 3. По завершении: idle анимация + reset cooldown → auto_attack подхватит сразу
+pub fn player_hit_stagger_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut PlayerHitStagger, &mut AnimatedCharacter, &Children), With<Player>>,
+    mut animation_query: Query<
+        (&PlayerAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
+        With<AnimationSetupComplete>
+    >,
+    mut cooldown_query: Query<&mut AttackCooldown, With<Player>>,
+    model_query: Query<Entity, With<PlayerModel>>,
+    children_query: Query<&Children>,
+    mesh_query: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, mut stagger, mut character, children) in &mut query {
+        stagger.timer.tick(time.delta());
+
+        // Emissive glow — выставляем ОДИН РАЗ при первом тике
+        if !stagger.emissive_applied {
+            stagger.emissive_applied = true;
+            let glow = LinearRgba::new(3.0, 3.0, 3.0, 1.0);
+            for child in children.iter() {
+                if model_query.get(child).is_ok() {
+                    for descendant in children_query.iter_descendants(child) {
+                        if let Ok(mat_handle) = mesh_query.get(descendant) {
+                            if let Some(material) = materials.get_mut(&mat_handle.0) {
+                                material.emissive = glow;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if stagger.timer.is_finished() {
+            character.current_animation = AnimationState::Idle;
+            commands.entity(entity).remove::<PlayerHitStagger>();
+
+            // Запустить idle анимацию — чистое состояние для blend в attack
+            if let Ok((animations, mut anim_player, mut transitions)) = animation_query.single_mut() {
+                transitions.play(&mut anim_player, animations.idle, Duration::from_millis(150))
+                    .repeat();
+            }
+
+            // Сбросить cooldown атаки → auto_attack подхватит сразу
+            if let Ok(mut cooldown) = cooldown_query.single_mut() {
+                cooldown.timer.finish();
+            }
+
+            // Сброс emissive ОДИН РАЗ при завершении
+            for child in children.iter() {
+                if model_query.get(child).is_ok() {
+                    for descendant in children_query.iter_descendants(child) {
+                        if let Ok(mat_handle) = mesh_query.get(descendant) {
+                            if let Some(material) = materials.get_mut(&mat_handle.0) {
+                                material.emissive = LinearRgba::BLACK;
+                            }
+                        }
+                    }
                 }
             }
         }
