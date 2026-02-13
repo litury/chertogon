@@ -3,7 +3,7 @@ use crate::shared::GameState;
 use crate::modules::combat::parts::{
     auto_attack, enemy_damage, camera_shake, slash_vfx, hit_particles,
     game_over, game_timer, knockback, hit_flash, damage_numbers,
-    impact_flash, damage_vignette, vfx_assets,
+    impact_flash, damage_vignette, vfx_assets, blood_decals, bloody_footprints,
 };
 
 pub struct CombatPlugin;
@@ -34,10 +34,18 @@ impl Plugin for CombatPlugin {
                 damage_vignette::damage_vignette_decay_system,
                 damage_vignette::damage_vignette_apply_system,
             ).run_if(in_state(GameState::Playing)))
+            .add_systems(Update, (
+                blood_decals::footprint_decay_system,
+                blood_decals::blood_decal_limit_system,
+                bloody_footprints::detect_blood_contact_system,
+                bloody_footprints::spawn_footprints_system,
+            ).run_if(in_state(GameState::Playing)))
             .add_systems(OnEnter(GameState::Playing), (
                 game_over::reset_on_enter,
                 game_timer::reset_game_timer,
                 vfx_assets::init_hit_vfx_assets,
+                blood_decals::init_blood_decal_assets,
+                slash_vfx::init_slash_vfx_assets,
             ))
             .add_systems(OnEnter(GameState::GameOver),
                 damage_vignette::reset_color_grading,

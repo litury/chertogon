@@ -112,7 +112,8 @@ pub fn apply_pending_attack_system(
     mut commands: Commands,
     mut camera_shake: ResMut<CameraShake>,
     vfx_assets: Res<HitVfxAssets>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    blood_assets: Res<blood_decals::BloodDecalAssets>,
+    slash_assets: Res<slash_vfx::SlashVfxAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -134,7 +135,7 @@ pub fn apply_pending_attack_system(
 
                 // VFX: Slash огненная дуга перед игроком
                 slash_vfx::spawn_slash(
-                    &mut commands, &mut meshes, &mut materials, &asset_server,
+                    &mut commands, &slash_assets, &mut materials,
                     player_pos, pending.direction,
                 );
 
@@ -177,8 +178,8 @@ pub fn apply_pending_attack_system(
 
                 // Blood decal — пятно крови на полу (остаётся навсегда)
                 blood_decals::spawn_blood_decal(
-                    &mut commands, &mut meshes, &mut materials, &asset_server,
-                    enemy_pos,
+                    &mut commands, &blood_assets,
+                    enemy_pos, blood_decals::BloodColor::Red,
                 );
 
                 debug!(

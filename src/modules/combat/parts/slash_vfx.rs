@@ -12,11 +12,38 @@ const SLASH_FRAMES: [&str; 6] = [
     "textures/vfx/slash/Alternative_3_06.png",
 ];
 
+/// Кэшированные ассеты для slash VFX — shared mesh + preloaded текстуры
+#[derive(Resource)]
+pub struct SlashVfxAssets {
+    pub mesh: Handle<Mesh>,
+    pub frames: [Handle<Image>; 6],
+}
+
+/// Инициализация slash ассетов при старте раунда
+pub fn init_slash_vfx_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    asset_server: Res<AssetServer>,
+) {
+    let mesh = meshes.add(Plane3d::default().mesh().size(1.7, 2.0));
+    let frames = [
+        asset_server.load(SLASH_FRAMES[0]),
+        asset_server.load(SLASH_FRAMES[1]),
+        asset_server.load(SLASH_FRAMES[2]),
+        asset_server.load(SLASH_FRAMES[3]),
+        asset_server.load(SLASH_FRAMES[4]),
+        asset_server.load(SLASH_FRAMES[5]),
+    ];
+    commands.insert_resource(SlashVfxAssets { mesh, frames });
+}
+
 /// Маркер slash-эффекта с покадровой анимацией
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct SlashVfx {
     pub timer: Timer,
+    /// Последний отрисованный кадр (чтобы не мутировать материал каждый кадр)
+    pub last_frame: usize,
 }
 
 /// Маркер: квад всегда повёрнут лицом к камере
@@ -41,21 +68,16 @@ pub fn vfx_billboard_system(
 /// Спавнит slash VFX перед игроком в направлении врага
 pub fn spawn_slash(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
+    slash_assets: &SlashVfxAssets,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    asset_server: &AssetServer,
     player_pos: Vec3,
     direction: Vec3,
 ) {
     let slash_pos = player_pos + direction * 0.8 + Vec3::Y * 0.8;
 
-    // Первый кадр анимации
-    let texture = asset_server.load(SLASH_FRAMES[0]);
-
-    // Квад с соотношением сторон текстуры (126x150 → ~0.84:1)
-    let mesh = meshes.add(Plane3d::default().mesh().size(1.7, 2.0));
+    // Каждый slash получает свой material (нужен для per-instance fade out)
     let material = materials.add(StandardMaterial {
-        base_color_texture: Some(texture),
+        base_color_texture: Some(slash_assets.frames[0].clone()),
         base_color: Color::WHITE,
         emissive: LinearRgba::new(5.0, 3.0, 0.5, 1.0),
         alpha_mode: AlphaMode::Blend,
@@ -66,11 +88,12 @@ pub fn spawn_slash(
     });
 
     commands.spawn((
-        Mesh3d(mesh),
+        Mesh3d(slash_assets.mesh.clone()),
         MeshMaterial3d(material),
         Transform::from_translation(slash_pos),
         SlashVfx {
             timer: Timer::from_seconds(0.25, TimerMode::Once),
+            last_frame: 0,
         },
         VfxBillboard,
     ));
@@ -82,7 +105,7 @@ pub fn slash_vfx_system(
     mut commands: Commands,
     mut query: Query<(Entity, &mut SlashVfx, &mut Transform, &MeshMaterial3d<StandardMaterial>)>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
+    slash_assets: Res<SlashVfxAssets>,
 ) {
     for (entity, mut vfx, mut transform, material_handle) in &mut query {
         vfx.timer.tick(time.delta());
@@ -97,21 +120,23 @@ pub fn slash_vfx_system(
         let scale = 1.0 + progress * 0.3;
         transform.scale = Vec3::splat(scale);
 
-        if let Some(material) = materials.get_mut(&material_handle.0) {
-            // Смена кадра
-            material.base_color_texture = Some(asset_server.load(SLASH_FRAMES[frame_index]));
+        // Обновляем материал только при смене кадра или в фазе fade out
+        let needs_update = frame_index != vfx.last_frame || progress > 0.7;
+        if needs_update {
+            vfx.last_frame = frame_index;
+            if let Some(material) = materials.get_mut(&material_handle.0) {
+                material.base_color_texture = Some(slash_assets.frames[frame_index].clone());
 
-            // Fade out в последние 30% анимации
-            let alpha = if progress > 0.7 {
-                1.0 - (progress - 0.7) / 0.3
-            } else {
-                1.0
-            };
-            material.base_color = Color::srgba(1.0, 1.0, 1.0, alpha);
+                let alpha = if progress > 0.7 {
+                    1.0 - (progress - 0.7) / 0.3
+                } else {
+                    1.0
+                };
+                material.base_color = Color::srgba(1.0, 1.0, 1.0, alpha);
 
-            // Emissive тоже затухает
-            let em = 1.0 - progress * 0.5;
-            material.emissive = LinearRgba::new(5.0 * em, 3.0 * em, 0.5 * em, 1.0);
+                let em = 1.0 - progress * 0.5;
+                material.emissive = LinearRgba::new(5.0 * em, 3.0 * em, 0.5 * em, 1.0);
+            }
         }
 
         if vfx.timer.is_finished() {

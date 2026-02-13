@@ -26,3 +26,4 @@ pub mod blood_decals;
 pub mod impact_flash;
 pub mod damage_vignette;
 pub mod vfx_assets;
+pub mod bloody_footprints;
