@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::asset::AssetMetaCheck;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::winit::WinitSettings;
 use avian3d::prelude::*;
@@ -9,14 +10,21 @@ use bevy::remote::{RemotePlugin, http::RemoteHttpPlugin};
 pub fn configure_app(app: &mut App) {
     app
         // Основные плагины Bevy
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Yandex Game".into(),
-                resolution: (1280, 720).into(),
+        .add_plugins(DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Yandex Game".into(),
+                    resolution: (1280, 720).into(),
+                    ..default()
+                }),
                 ..default()
-            }),
-            ..default()
-        }))
+            })
+            // Отключить проверку .meta файлов (WASM: HTTP 404 → ошибки парсинга)
+            .set(bevy::asset::AssetPlugin {
+                meta_check: AssetMetaCheck::Never,
+                ..default()
+            })
+        )
 
         // Физика Avian3D с оптимизированными параметрами
         .add_plugins(
@@ -29,16 +37,19 @@ pub fn configure_app(app: &mut App) {
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .init_state::<crate::shared::GameState>();
 
-    // ✅ Battery optimization для мобильных устройств
-    // На iOS/Android: экономит батарею
-    // На desktop: обычный режим для максимальной отзывчивости
-    #[cfg(any(target_os = "ios", target_os = "android"))]
+    #[cfg(target_arch = "wasm32")]
+    {
+        app.insert_resource(WinitSettings::default());
+        info!("WASM browser mode");
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "android")))]
     {
         app.insert_resource(WinitSettings::mobile_defaults());
         info!("📱 Mobile battery optimization enabled");
     }
 
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(all(not(target_arch = "wasm32"), not(any(target_os = "ios", target_os = "android"))))]
     {
         app.insert_resource(WinitSettings::game());
         info!("🖥️ Desktop game mode enabled (uncapped FPS)");
