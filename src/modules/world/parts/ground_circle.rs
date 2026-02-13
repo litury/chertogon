@@ -19,6 +19,8 @@ pub struct GroundCircle {
     pub last_hp_fraction: f32,
     /// Угол направления (радианы, из rotation модели)
     pub last_facing: f32,
+    /// Последнее значение alpha (избегаем get_mut каждый кадр)
+    pub last_alpha: f32,
 }
 
 /// HP-дуга + направление: обновляет меш и вращение кольца
@@ -90,10 +92,14 @@ fn update_ring(
         transform.rotation = Quat::from_rotation_y(circle.last_facing)
             * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
 
-        // Лёгкий пульс alpha (без тускления цвета!)
+        // Лёгкий пульс alpha — обновляем материал ТОЛЬКО при заметном изменении
         let pulse = 0.9 + 0.1 * (t * circle.pulse_speed).sin();
-        if let Some(mat) = materials.get_mut(&circle.material_handle) {
-            mat.base_color = mat.base_color.with_alpha(circle.base_alpha * pulse);
+        let new_alpha = circle.base_alpha * pulse;
+        if (new_alpha - circle.last_alpha).abs() > 0.02 {
+            circle.last_alpha = new_alpha;
+            if let Some(mat) = materials.get_mut(&circle.material_handle) {
+                mat.base_color = mat.base_color.with_alpha(new_alpha);
+            }
         }
     }
 }

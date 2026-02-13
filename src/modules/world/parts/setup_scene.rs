@@ -20,9 +20,8 @@ pub fn setup_scene(
             ..default()
         },
         bevy::light::CascadeShadowConfigBuilder {
-            num_cascades: 2,
-            maximum_distance: 35.0,
-            first_cascade_far_bound: 15.0,
+            num_cascades: 1,
+            maximum_distance: 20.0,
             ..default()
         }.build(),
         Transform::from_xyz(10.0, 20.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
