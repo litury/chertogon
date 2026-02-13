@@ -23,7 +23,7 @@ pub fn handle_touch_input(
         // Started - начало касания
         input_state.touch_start = Some(touch.position());
         input_state.is_touch_active = true;
-        info!("👆 Touch started at {:?}", touch.position());
+        debug!("👆 Touch started at {:?}", touch.position());
     }
 
     // Обрабатываем активные касания (движение)
@@ -75,7 +75,7 @@ pub fn handle_touch_input(
         input_state.is_running = false;
         input_state.is_touch_active = false;
         input_state.touch_start = None;
-        info!("🛑 Touch ended - stopping movement");
+        debug!("🛑 Touch ended - stopping movement");
     }
 
     // Если нет активных касаний - убеждаемся что состояние сброшено

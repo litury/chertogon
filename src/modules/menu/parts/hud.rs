@@ -107,13 +107,18 @@ pub fn update_hud(
     }
 }
 
-/// Обновляет текст таймера каждый кадр
+/// Обновляет текст таймера раз в секунду (не каждый кадр)
 pub fn update_timer_text(
     game_timer: Res<GameTimer>,
     mut query: Query<&mut Text, With<TimerText>>,
+    mut last_secs: Local<u32>,
 ) {
-    for mut text in &mut query {
-        **text = game_timer.formatted();
+    let current_secs = game_timer.elapsed as u32;
+    if current_secs != *last_secs {
+        *last_secs = current_secs;
+        for mut text in &mut query {
+            **text = game_timer.formatted();
+        }
     }
 }
 
