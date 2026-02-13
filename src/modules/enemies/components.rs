@@ -144,7 +144,7 @@ pub struct WaveState {
 
 impl Default for WaveState {
     fn default() -> Self {
-        let mut cooldown = Timer::from_seconds(1.0, TimerMode::Once);
+        let mut cooldown = Timer::from_seconds(3.0, TimerMode::Once);
         cooldown.finish(); // Первая волна стартует сразу
         Self {
             current_wave: 0,

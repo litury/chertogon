@@ -114,6 +114,7 @@ fn spawn_upyr_at(
             material_handle: ring_material,
             last_hp_fraction: -1.0,
             last_facing: 0.0,
+            last_alpha: 0.0,
         },
     )).id();
 
@@ -212,6 +213,7 @@ fn spawn_leshiy_at(
             material_handle: ring_material,
             last_hp_fraction: -1.0,
             last_facing: 0.0,
+            last_alpha: 0.0,
         },
     )).id();
 
@@ -312,6 +314,7 @@ fn spawn_volkolak_at(
             material_handle: ring_material,
             last_hp_fraction: -1.0,
             last_facing: 0.0,
+            last_alpha: 0.0,
         },
     )).id();
 
@@ -340,7 +343,7 @@ pub fn wave_spawner_system(
                 wave.enemies_to_spawn = 2 + wave.current_wave;
                 wave.spawn_timer.reset();
                 wave.phase = WavePhase::Spawning;
-                info!("🌊 Wave {} started! Spawning {} enemies", wave.current_wave, wave.enemies_to_spawn);
+                debug!("🌊 Wave {} started! Spawning {} enemies", wave.current_wave, wave.enemies_to_spawn);
             }
         }
         WavePhase::Spawning => {
@@ -352,14 +355,14 @@ pub fn wave_spawner_system(
                 let roll = rand_01();
                 if wave.current_wave >= 3 && roll < 0.3 {
                     // Леший: 30% с волны 3+
-                    info!("🌿 Wave {} — spawning Leshiy at {:?}", wave.current_wave, pos);
+                    debug!("🌿 Wave {} — spawning Leshiy at {:?}", wave.current_wave, pos);
                     spawn_leshiy_at(
                         &mut commands, &asset_server, &mut graphs,
                         &mut meshes, &mut materials, pos,
                     );
                 } else if wave.current_wave >= 2 && roll < 0.5 {
                     // Волколак: 20% с волны 2+ (roll 0.3–0.5, или 0.0–0.5 на волне 2)
-                    info!("🐺 Wave {} — spawning Volkolak at {:?}", wave.current_wave, pos);
+                    debug!("🐺 Wave {} — spawning Volkolak at {:?}", wave.current_wave, pos);
                     spawn_volkolak_at(
                         &mut commands, &asset_server, &mut graphs,
                         &mut meshes, &mut materials, pos,
@@ -374,7 +377,7 @@ pub fn wave_spawner_system(
 
                 if wave.enemies_to_spawn == 0 {
                     wave.phase = WavePhase::Fighting;
-                    info!("⚔️ Wave {} — all enemies spawned, fight!", wave.current_wave);
+                    debug!("⚔️ Wave {} — all enemies spawned, fight!", wave.current_wave);
                 }
             }
         }
@@ -385,7 +388,7 @@ pub fn wave_spawner_system(
                 // Все мертвы — начинаем cooldown
                 wave.wave_cooldown.reset();
                 wave.phase = WavePhase::Cooldown;
-                info!("✅ Wave {} cleared! Next wave in 3s...", wave.current_wave);
+                debug!("✅ Wave {} cleared! Next wave in 3s...", wave.current_wave);
             }
         }
     }

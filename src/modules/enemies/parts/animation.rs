@@ -47,7 +47,7 @@ fn setup_anim_player(
     model_child: Entity,
     commands: &mut Commands,
 ) {
-    info!("✅ Enemy AnimationPlayer found on {:?}! idle={:?}, walk={:?}, run={:?}, attack={:?}",
+    debug!("✅ Enemy AnimationPlayer found on {:?}! idle={:?}, walk={:?}, run={:?}, attack={:?}",
           entity, anim_indices.idle, anim_indices.walk, anim_indices.run, anim_indices.attack);
 
     let animations = EnemyAnimations {
@@ -82,7 +82,7 @@ fn setup_anim_player(
     commands.entity(entity).insert(EnemyAnimationSetupComplete);
     commands.entity(model_child).remove::<EnemyAnimationIndices>();
 
-    info!("🎬 Enemy animation initialized (state: {:?})", current_anim);
+    debug!("🎬 Enemy animation initialized (state: {:?})", current_anim);
 }
 
 /// Переключение анимации врага на основе состояния

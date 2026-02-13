@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
-use crate::modules::enemies::parts::{spawner, ai, animation, cleanup};
+use crate::modules::enemies::parts::{spawner, ai, animation, cleanup, preload};
 use crate::modules::enemies::components::WaveState;
 
 pub struct EnemiesPlugin;
@@ -13,6 +13,7 @@ impl Plugin for EnemiesPlugin {
                 cleanup::despawn_enemies,
                 cleanup::reset_wave_state,
                 cleanup::reset_kill_count,
+                preload::preload_enemy_assets,
             ).chain())
             .add_systems(Update, spawner::wave_spawner_system
                 .run_if(in_state(GameState::Playing)))
@@ -20,6 +21,7 @@ impl Plugin for EnemiesPlugin {
                 ai::enemy_ai_system,
                 ai::start_enemy_death,
                 ai::process_dying_enemies,
+                ai::strip_corpse_system,
                 animation::enemy_animation_state_system,
                 animation::enemy_attack_anim_replay_system,
             ).chain().run_if(in_state(GameState::Playing)))

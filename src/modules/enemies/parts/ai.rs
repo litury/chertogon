@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::light::NotShadowCaster;
 use avian3d::prelude::*;
 use crate::modules::player::components::Player;
 use crate::modules::enemies::components::*;
@@ -95,7 +96,7 @@ pub fn start_enemy_death(
     for (entity, health, children, mut anim_state, mut velocity) in &mut enemies {
         if health.is_dead() {
             kill_count.total += 1;
-            info!("💀 Enemy dying — playing death animation (kills: {})", kill_count.total);
+            debug!("💀 Enemy dying — playing death animation (kills: {})", kill_count.total);
             anim_state.current = EnemyAnim::Dying;
             velocity.0 = Vec3::ZERO;
 
@@ -136,6 +137,43 @@ pub fn process_dying_enemies(
                 .remove::<EnemyAttackCooldown>()
                 .remove::<Enemy>()
                 .insert(EnemyCorpse);
+        }
+    }
+}
+
+/// Облегчаем трупы: убираем анимацию (CPU) + тени (GPU).
+/// Выполняется ОДИН раз при создании трупа (Added<EnemyCorpse>).
+/// Результат: статичный меш в death-позе, без shadow pass.
+pub fn strip_corpse_system(
+    mut commands: Commands,
+    new_corpses: Query<&Children, Added<EnemyCorpse>>,
+    model_query: Query<Entity, With<EnemyModel>>,
+    children_query: Query<&Children>,
+    animation_query: Query<Entity, With<AnimationPlayer>>,
+    mesh_query: Query<Entity, With<Mesh3d>>,
+) {
+    for corpse_children in &new_corpses {
+        for &child in corpse_children {
+            if model_query.get(child).is_ok() {
+                // Убираем AnimationGraphHandle с модели
+                commands.entity(child).remove::<AnimationGraphHandle>();
+
+                // Обходим всех потомков
+                for descendant in children_query.iter_descendants(child) {
+                    // Убираем анимацию (CPU: AnimationPlayer больше не тикает)
+                    if animation_query.get(descendant).is_ok() {
+                        commands.entity(descendant)
+                            .remove::<AnimationPlayer>()
+                            .remove::<AnimationTransitions>()
+                            .remove::<EnemyAnimations>()
+                            .remove::<EnemyAnimationSetupComplete>();
+                    }
+                    // Отключаем тени на мешах (GPU: не рендерится в shadow pass)
+                    if mesh_query.get(descendant).is_ok() {
+                        commands.entity(descendant).insert(NotShadowCaster);
+                    }
+                }
+            }
         }
     }
 }
