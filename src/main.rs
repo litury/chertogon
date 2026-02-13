@@ -1,16 +1,12 @@
 use bevy::prelude::*;
-use bevy_firework::plugin::ParticleSystemPlugin;
 use chertogon::config::game_config;
-use chertogon::modules::{WorldPlugin, InputPlugin, PlayerPlugin, CameraPlugin, EnemiesPlugin, CombatPlugin, MenuPlugin};
+use chertogon::modules::{WorldPlugin, InputPlugin, PlayerPlugin, CameraPlugin, EnemiesPlugin, CombatPlugin, MenuPlugin, SelectionPlugin};
 
 fn main() {
     let mut app = App::new();
 
     // Конфигурация из модуля config
     game_config::configure_app(&mut app);
-
-    // Частицы (огонь, кровь, искры)
-    app.add_plugins(ParticleSystemPlugin::default());
 
     // Игровые модули (плагины)
     app.add_plugins((
@@ -21,6 +17,7 @@ fn main() {
         EnemiesPlugin,
         CombatPlugin,
         MenuPlugin,
+        SelectionPlugin,
     ));
 
     app.run();

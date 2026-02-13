@@ -5,6 +5,7 @@ pub mod camera;
 pub mod enemies;
 pub mod combat;
 pub mod menu;
+pub mod selection;
 
 // Реэкспорт публичных API
 pub use world::WorldPlugin;
@@ -14,3 +15,4 @@ pub use camera::{CameraPlugin, CameraTarget};
 pub use enemies::{EnemiesPlugin, Enemy, Health, EnemyType};
 pub use combat::{CombatPlugin, PlayerHealth};
 pub use menu::MenuPlugin;
+pub use selection::SelectionPlugin;
