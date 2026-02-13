@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::modules::{Player, InputState};
 use crate::modules::camera::CameraZoom;
 use crate::modules::combat::CameraShake;
+use crate::modules::selection::components::PortraitCamera;
 use crate::shared::constants::{
     CAMERA_FOLLOW_SPEED, CAMERA_OFFSET_Y,
     CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_SPEED, CAMERA_ZOOM_SMOOTHNESS
@@ -32,7 +33,7 @@ pub fn camera_zoom_system(
 /// ✅ ИСПРАВЛЕНО: Камера следует за Player entity (с физикой), а не за PlayerModel
 pub fn follow_player_system(
     player_query: Query<&Transform, With<Player>>,
-    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<Player>)>,
+    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<Player>, Without<PortraitCamera>)>,
     camera_zoom: Res<CameraZoom>,
     shake: Res<CameraShake>,
     time: Res<Time>,
@@ -41,8 +42,8 @@ pub fn follow_player_system(
         if let Ok(mut camera_transform) = camera_query.single_mut() {
             let zoom_ratio = camera_zoom.current_distance / 14.0;
 
-            // Shake offset (затухающий шум при ударе)
-            let shake_offset = shake.offset(time.elapsed_secs());
+            // Shake offset (направленный толчок при ударе)
+            let shake_offset = shake.offset();
 
             let target_position = player_transform.translation + Vec3::new(
                 0.0,
