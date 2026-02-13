@@ -6,7 +6,7 @@ export const GAME_DESCRIPTION =
 
 export const SECTION_IDS = {
   hero: "hero",
+  about: "about",
   features: "features",
   lore: "lore",
-  gameplay: "gameplay",
 } as const;
