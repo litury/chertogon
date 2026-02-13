@@ -5,7 +5,7 @@ use bevy::prelude::*;
 pub struct BloodDecal;
 
 /// Спавнит пятно крови на полу в позиции врага.
-/// Простой текстурированный квад чуть выше пола с текстурой blood_splatter.png.
+/// Тёмно-красный тон + слабый emissive для эффекта "мокрой крови" при Bloom.
 pub fn spawn_blood_decal(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -23,9 +23,10 @@ pub fn spawn_blood_decal(
     let mesh = meshes.add(Plane3d::default().mesh().size(1.5, 1.5));
     let material = materials.add(StandardMaterial {
         base_color_texture: Some(texture),
-        base_color: Color::WHITE,
+        base_color: Color::srgb(0.6, 0.05, 0.05), // Тёмно-красный тон вместо белого
+        emissive: LinearRgba::new(0.8, 0.05, 0.02, 1.0), // Слабый красный emissive — "мокрая кровь"
         alpha_mode: AlphaMode::Blend,
-        unlit: true,
+        unlit: false,          // PBR — реагирует на освещение сцены
         double_sided: true,
         cull_mode: None,
         ..default()

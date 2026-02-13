@@ -4,6 +4,7 @@ use crate::modules::player::components::Player;
 use crate::modules::combat::components::PlayerHealth;
 use crate::modules::menu::parts::fade_transition::FadeState;
 use super::camera_shake::CameraShake;
+use super::damage_vignette::DamageVignette;
 
 /// Счётчик убийств за текущий раунд
 #[derive(Resource, Default)]
@@ -30,11 +31,13 @@ pub fn check_game_over_system(
     }
 }
 
-/// Сброс при входе в Playing: unpause время + reset CameraShake
+/// Сброс при входе в Playing: unpause время + reset CameraShake + DamageVignette
 pub fn reset_on_enter(
     mut time: ResMut<Time<Virtual>>,
     mut shake: ResMut<CameraShake>,
+    mut vignette: ResMut<DamageVignette>,
 ) {
     time.unpause();
     *shake = CameraShake::default();
+    *vignette = DamageVignette::default();
 }

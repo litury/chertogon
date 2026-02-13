@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use super::vfx_assets::HitVfxAssets;
 
 /// Маркер частицы попадания
 #[derive(Component, Reflect)]
@@ -8,21 +9,12 @@ pub struct HitParticle {
     pub timer: Timer,
 }
 
-/// Спавнит искры при попадании по врагу
+/// Спавнит искры при попадании по врагу (использует кэшированные ассеты)
 pub fn spawn_hit_particles(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    vfx_assets: &HitVfxAssets,
     hit_pos: Vec3,
 ) {
-    let mesh = meshes.add(Sphere::new(0.06));
-    let material = materials.add(StandardMaterial {
-        base_color: Color::srgb(1.0, 0.4, 0.1),
-        emissive: LinearRgba::new(8.0, 2.0, 0.3, 1.0),
-        unlit: true,
-        ..default()
-    });
-
     // 6 частиц в случайных направлениях
     let directions = [
         Vec3::new(1.0, 2.0, 0.5),
@@ -36,8 +28,8 @@ pub fn spawn_hit_particles(
     for dir in directions {
         let speed = 3.0 + dir.y * 0.5;
         commands.spawn((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
+            Mesh3d(vfx_assets.particle_mesh.clone()),
+            MeshMaterial3d(vfx_assets.particle_material.clone()),
             Transform::from_translation(hit_pos + Vec3::Y * 1.0),
             HitParticle {
                 velocity: dir.normalize() * speed,

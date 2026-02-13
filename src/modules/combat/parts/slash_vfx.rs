@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::math::Mat3;
+use crate::modules::selection::components::PortraitCamera;
 
 /// Пути к кадрам анимации огненной дуги (CC0, OpenGameArt)
 const SLASH_FRAMES: [&str; 6] = [
@@ -24,7 +25,7 @@ pub struct VfxBillboard;
 
 /// Поворачивает VFX квады лицом к камере (billboard)
 pub fn vfx_billboard_system(
-    camera_q: Query<&Transform, With<Camera3d>>,
+    camera_q: Query<&Transform, (With<Camera3d>, Without<PortraitCamera>)>,
     mut billboards: Query<&mut Transform, (With<VfxBillboard>, Without<Camera3d>)>,
 ) {
     let Ok(cam) = camera_q.single() else { return };

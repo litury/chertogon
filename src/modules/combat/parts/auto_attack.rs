@@ -2,15 +2,17 @@ use bevy::prelude::*;
 use std::time::Duration;
 use avian3d::prelude::*;
 use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerModel, PlayerAnimations, AnimationSetupComplete};
-use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel};
+use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel, EnemyAnimState, EnemyAnim};
 use crate::modules::combat::components::{Weapon, AttackCooldown, AttackAnimTimer, PendingAttack};
 use super::camera_shake::CameraShake;
-use super::hitstop::Hitstop;
 use super::knockback::Staggered;
 use super::hit_flash::HitFlash;
+use super::vfx_assets::HitVfxAssets;
 use super::slash_vfx;
 use super::damage_numbers;
 use super::blood_decals;
+use super::hit_particles;
+use super::impact_flash;
 
 /// Автоатака игрока: находит ближайшего врага → запускает замах → урон по таймеру
 pub fn player_auto_attack_system(
@@ -29,6 +31,11 @@ pub fn player_auto_attack_system(
 ) {
     let Ok((player_entity, weapon, mut cooldown, children, player_transform, mut character)) =
         player_query.single_mut() else { return };
+
+    // Во время стаггера нельзя атаковать (ARPG стандарт: action lock)
+    if character.current_animation == AnimationState::HitReaction {
+        return;
+    }
 
     // Тикаем таймер
     cooldown.timer.tick(time.delta());
@@ -100,11 +107,11 @@ pub fn player_auto_attack_system(
 pub fn apply_pending_attack_system(
     time: Res<Time>,
     mut player_query: Query<(Entity, &Transform, &mut PendingAttack), With<Player>>,
-    mut enemies: Query<(&Transform, &mut Health, &mut LinearVelocity, &Children), (With<Enemy>, Without<EnemyDying>)>,
+    mut enemies: Query<(&Transform, &mut Health, &mut LinearVelocity, &Children, &mut EnemyAnimState), (With<Enemy>, Without<EnemyDying>)>,
     enemy_model_query: Query<Entity, With<EnemyModel>>,
     mut commands: Commands,
     mut camera_shake: ResMut<CameraShake>,
-    mut hitstop: ResMut<Hitstop>,
+    vfx_assets: Res<HitVfxAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
@@ -119,7 +126,7 @@ pub fn apply_pending_attack_system(
         let player_pos = player_transform.translation;
 
         // Наносим урон — проверяем что враг ещё жив и существует
-        if let Ok((enemy_transform, mut health, mut velocity, children)) = enemies.get_mut(pending.target) {
+        if let Ok((enemy_transform, mut health, mut velocity, children, mut anim_state)) = enemies.get_mut(pending.target) {
             if !health.is_dead() {
                 health.take_damage(pending.damage);
 
@@ -131,16 +138,28 @@ pub fn apply_pending_attack_system(
                     player_pos, pending.direction,
                 );
 
-                // Camera shake
-                camera_shake.trigger(0.15, 0.15);
+                // Hit particles — искры при попадании (кэшированные ассеты)
+                hit_particles::spawn_hit_particles(
+                    &mut commands, &vfx_assets,
+                    enemy_pos,
+                );
 
-                // Hitstop — микрозаморозка 50мс
-                hitstop.trigger(0.05);
+                // Impact flash — вспышка света в точке удара
+                impact_flash::spawn_impact_flash(
+                    &mut commands,
+                    enemy_pos,
+                );
+
+                // Camera shake — направленный толчок камеры
+                camera_shake.trigger(0.15, 0.15, pending.direction);
 
                 // Knockback — толкаем врага от игрока
                 let knockback_dir = pending.direction;
                 velocity.0 = knockback_dir * 8.0;
-                commands.entity(pending.target).insert(Staggered::new(0.15));
+                commands.entity(pending.target).insert(Staggered::new(0.35));
+
+                // Hit reaction анимация
+                anim_state.current = EnemyAnim::HitReaction;
 
                 // Hit flash — scale-pop на модели врага (не на parent, чтобы круг не двигался)
                 for child in children.iter() {
@@ -162,7 +181,7 @@ pub fn apply_pending_attack_system(
                     enemy_pos,
                 );
 
-                info!(
+                debug!(
                     "⚔️ Player hits enemy for {} damage! (HP: {}/{})",
                     pending.damage, health.current, health.max
                 );
