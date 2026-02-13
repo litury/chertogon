@@ -9,3 +9,8 @@ pub mod ai;
 pub mod animation;
 pub mod cleanup;
 pub mod preload;
+pub mod spatial_grid;
+pub mod separation;
+pub mod attack_slots;
+pub mod portal_spawn;
+pub mod portal_vfx;

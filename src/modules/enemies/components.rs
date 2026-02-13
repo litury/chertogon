@@ -1,5 +1,9 @@
 use bevy::prelude::*;
 
+/// SystemSet для основного цикла AI врагов (chase, death, animation)
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EnemyCoreSet;
+
 /// Маркер компонент для врага
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -124,6 +128,64 @@ impl Default for ChasePlayer {
     }
 }
 
+/// Направление орбитирования вокруг цели (CW/CCW)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct OrbitDirection {
+    pub clockwise: bool,
+    pub change_timer: Timer,
+}
+
+/// Маркер: враг получил слот на ближнюю атаку
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct HasAttackSlot;
+
+/// Менеджер слотов — лимитирует одновременных атакующих (Diablo-style)
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+pub struct AttackSlotManager {
+    pub max_slots: u32,
+}
+
+impl Default for AttackSlotManager {
+    fn default() -> Self {
+        Self { max_slots: 4 }
+    }
+}
+
+/// Маркер портала-разлома ("Разлом Нави")
+#[derive(Component, Reflect, Clone, Copy)]
+#[reflect(Component)]
+pub struct SpawnPortal {
+    pub index: u8, // 0 = "Разлом Огня", 1 = "Разлом Тьмы"
+}
+
+/// Маркер визуальной воронки портала (child entity)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PortalVortex;
+
+/// Маркер точечного света портала (child entity)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PortalLight;
+
+/// Анимация появления врага из портала (масштаб 0→1 за 0.5с)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PortalSpawnAnim {
+    pub timer: Timer,
+}
+
+impl PortalSpawnAnim {
+    pub fn new() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.5, TimerMode::Once),
+        }
+    }
+}
+
 /// Фаза волны
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WavePhase {
@@ -140,6 +202,10 @@ pub struct WaveState {
     pub spawn_timer: Timer,
     pub wave_cooldown: Timer,
     pub phase: WavePhase,
+    /// Счётчик врагов, отправленных в портал 0 (для балансировки ~50/50)
+    pub portal_0_count: u32,
+    /// Счётчик врагов, отправленных в портал 1
+    pub portal_1_count: u32,
 }
 
 impl Default for WaveState {
@@ -152,6 +218,8 @@ impl Default for WaveState {
             spawn_timer: Timer::from_seconds(0.8, TimerMode::Repeating),
             wave_cooldown: cooldown,
             phase: WavePhase::Cooldown,
+            portal_0_count: 0,
+            portal_1_count: 0,
         }
     }
 }
