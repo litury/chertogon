@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme {
+  /* Основа (из GAME_DESIGN.md секция 4) */
+  --color-stone-floor: #2A2A30;
+  --color-stone-wall: #12121A;
+  --color-fog: #404050;
+
+  /* Акценты */
+  --color-blood: #8B0000;
+  --color-blood-bright: #CC0000;
+  --color-rune-blue: #4080FF;
+  --color-rune-glow: #6BA0FF;
+  --color-torch: #FF6600;
+
+  /* Эффекты */
+  --color-soul-green: #00FFAA;
+  --color-spark: #FFFFFF;
+  --color-death-smoke: #400000;
+
+  /* Шрифты */
+  --font-display: "Cinzel", serif;
+  --font-body: "Inter", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+::selection {
+  background-color: var(--color-rune-blue);
+  color: white;
+}
