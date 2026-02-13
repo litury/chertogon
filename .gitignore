@@ -28,3 +28,22 @@ desktop.ini
 
 .env
 .env.local
+
+# Asset pipeline scripts (utility, not part of the game)
+scripts/node_modules/
+scripts/package.json
+scripts/package-lock.json
+
+# Landing page (web/)
+web/node_modules/
+web/dist/
+web/public/game/
+
+# WASM build output
+dist/
+
+# MCP/Playwright logs
+.playwright-mcp/
+
+# Vendored crates
+crates/
