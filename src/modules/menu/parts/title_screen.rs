@@ -5,7 +5,10 @@ use crate::modules::menu::parts::fade_transition::FadeState;
 use crate::toolkit::asset_paths;
 
 /// Создаёт Title Screen с фоновым изображением, виньеткой и анимациями
-pub fn setup_title_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn setup_title_screen(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
     let font_title = asset_server.load(asset_paths::FONT_TITLE);
     let font_ui = asset_server.load(asset_paths::FONT_UI);
     let font_ui_bold = asset_server.load(asset_paths::FONT_UI_BOLD);
@@ -225,6 +228,32 @@ pub fn title_screen_interaction(
 
     if start {
         fade.start_fade(GameState::Playing, false);
+    }
+}
+
+/// Убирает LoadingOverlay после загрузки шрифтов и появления TitleScreen UI
+pub fn remove_loading_overlay(
+    mut commands: Commands,
+    overlay_query: Query<Entity, With<LoadingOverlay>>,
+    title_query: Query<&TitleScreenUI>,
+    asset_server: Res<AssetServer>,
+) {
+    if title_query.is_empty() || overlay_query.is_empty() {
+        return;
+    }
+    let fonts_loaded = [
+        asset_paths::FONT_TITLE,
+        asset_paths::FONT_UI,
+        asset_paths::FONT_UI_BOLD,
+    ].iter().all(|path| {
+        let handle: Handle<Font> = asset_server.load(*path);
+        asset_server.is_loaded_with_dependencies(&handle)
+    });
+    if !fonts_loaded {
+        return;
+    }
+    for entity in &overlay_query {
+        commands.entity(entity).despawn();
     }
 }
 

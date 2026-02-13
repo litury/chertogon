@@ -39,3 +39,7 @@ pub struct PulsingText;
 /// Маркер для текста таймера в HUD
 #[derive(Component)]
 pub struct TimerText;
+
+/// Маркер загрузочного overlay (скрывает 3D-сцену до готовности UI)
+#[derive(Component)]
+pub struct LoadingOverlay;

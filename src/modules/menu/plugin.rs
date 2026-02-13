@@ -1,12 +1,15 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
-use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition};
+use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics};
 
 pub struct MenuPlugin;
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app
+            // Диагностика загрузки шрифтов
+            .add_systems(Startup, font_diagnostics::load_fonts)
+            .add_systems(Update, font_diagnostics::check_font_loading)
             // Fade transition system (глобальный, работает во всех стейтах)
             .init_resource::<fade_transition::FadeState>()
             .add_systems(Startup, fade_transition::spawn_fade_overlay)
@@ -16,6 +19,7 @@ impl Plugin for MenuPlugin {
             .add_systems(Update, (
                 title_screen::title_screen_interaction,
                 title_screen::pulsing_text_system,
+                title_screen::remove_loading_overlay,
             ).run_if(in_state(GameState::TitleScreen)))
             .add_systems(OnExit(GameState::TitleScreen), title_screen::cleanup_title_screen)
             // HUD

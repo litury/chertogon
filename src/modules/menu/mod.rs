@@ -3,3 +3,4 @@ pub mod components;
 pub(crate) mod parts;
 
 pub use plugin::MenuPlugin;
+pub use components::LoadingOverlay;
