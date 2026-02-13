@@ -145,12 +145,13 @@ pub struct Footprint {
 pub fn blood_decal_limit_system(
     mut commands: Commands,
     decals: Query<Entity, (With<BloodDecal>, Without<Footprint>)>,
+    mut buf: Local<Vec<Entity>>,
 ) {
-    let count = decals.iter().count();
-    if count > MAX_BLOOD_DECALS {
-        let to_remove = count - MAX_BLOOD_DECALS;
-        for (i, entity) in decals.iter().enumerate() {
-            if i >= to_remove { break; }
+    // Local<Vec> — capacity переиспользуется между кадрами (0 аллокаций в steady state)
+    buf.clear();
+    buf.extend(decals.iter());
+    if buf.len() > MAX_BLOOD_DECALS {
+        for &entity in &buf[..buf.len() - MAX_BLOOD_DECALS] {
             commands.entity(entity).despawn();
         }
     }

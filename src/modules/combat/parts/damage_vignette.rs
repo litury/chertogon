@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::render::view::ColorGrading;
-use crate::modules::selection::components::PortraitCamera;
 
 /// Ресурс: красный сдвиг экрана при получении урона игроком
 /// Паттерн аналогичен CameraShake: trigger → decay
@@ -46,7 +45,7 @@ pub fn damage_vignette_decay_system(
 /// Exposure темнее, температура теплее (красный), тени насыщеннее
 pub fn damage_vignette_apply_system(
     vignette: Res<DamageVignette>,
-    mut camera_query: Query<&mut ColorGrading, (With<Camera3d>, Without<PortraitCamera>)>,
+    mut camera_query: Query<&mut ColorGrading, With<Camera3d>>,
 ) {
     let Ok(mut grading) = camera_query.single_mut() else { return };
 
@@ -69,7 +68,7 @@ pub fn damage_vignette_apply_system(
 
 /// Сброс ColorGrading при смерти — чтобы не застревал красный/тёмный экран
 pub fn reset_color_grading(
-    mut camera_query: Query<&mut ColorGrading, (With<Camera3d>, Without<PortraitCamera>)>,
+    mut camera_query: Query<&mut ColorGrading, With<Camera3d>>,
 ) {
     let Ok(mut grading) = camera_query.single_mut() else { return };
     grading.global.exposure = -0.15;

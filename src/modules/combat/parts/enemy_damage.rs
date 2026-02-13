@@ -9,6 +9,7 @@ use super::damage_vignette::DamageVignette;
 use super::camera_shake::CameraShake;
 use super::hit_flash::HitFlash;
 use super::hit_particles;
+use super::damage_numbers;
 use super::vfx_assets::HitVfxAssets;
 
 /// Враг наносит контактный урон игроку когда в состоянии Attacking
@@ -26,6 +27,7 @@ pub fn enemy_contact_damage_system(
     mut vignette: ResMut<DamageVignette>,
     mut camera_shake: ResMut<CameraShake>,
     vfx_assets: Res<HitVfxAssets>,
+    asset_server: Res<AssetServer>,
 ) {
     let Ok((player_entity, player_tf, mut player_health, mut character, mut velocity, children, has_stagger_cooldown)) = player.single_mut() else { return };
     let player_pos = player_tf.translation;
@@ -36,7 +38,18 @@ pub fn enemy_contact_damage_system(
             attack_cd.timer.tick(time.delta());
 
             if attack_cd.timer.is_finished() {
-                // Diablo 2: урон ВСЕГДА проходит
+                // Проверка дистанции: промах если игрок убежал
+                let distance = (player_pos - enemy_tf.translation).length();
+                if distance > attack_cd.max_range {
+                    damage_numbers::spawn_miss_text(
+                        &mut commands, &asset_server,
+                        player_pos,
+                    );
+                    attack_cd.timer.reset();
+                    continue;
+                }
+
+                // Diablo 2: урон ВСЕГДА проходит (если в радиусе)
                 player_health.take_damage(attack_cd.damage);
 
                 let hit_dir = (player_pos - enemy_tf.translation).normalize_or_zero();

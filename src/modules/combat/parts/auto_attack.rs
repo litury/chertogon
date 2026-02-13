@@ -3,7 +3,7 @@ use std::time::Duration;
 use avian3d::prelude::*;
 use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerModel, PlayerAnimations, AnimationSetupComplete};
 use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel, EnemyAnimState, EnemyAnim};
-use crate::modules::combat::components::{Weapon, AttackCooldown, AttackAnimTimer, PendingAttack};
+use crate::modules::combat::components::{Weapon, AttackCooldown, AttackAnimTimer, PendingAttack, MISS_RANGE_MULTIPLIER};
 use super::camera_shake::CameraShake;
 use super::knockback::Staggered;
 use super::hit_flash::HitFlash;
@@ -90,6 +90,7 @@ pub fn player_auto_attack_system(
         damage: weapon.damage,
         direction: direction_2d,
         timer: Timer::from_seconds(0.42, TimerMode::Once),
+        max_range: weapon.range * MISS_RANGE_MULTIPLIER,
     });
 
     // Сбрасываем cooldown
@@ -128,10 +129,25 @@ pub fn apply_pending_attack_system(
 
         // Наносим урон — проверяем что враг ещё жив и существует
         if let Ok((enemy_transform, mut health, mut velocity, children, mut anim_state)) = enemies.get_mut(pending.target) {
-            if !health.is_dead() {
-                health.take_damage(pending.damage);
+            let enemy_pos = enemy_transform.translation;
+            let distance = (enemy_pos - player_pos).length();
 
-                let enemy_pos = enemy_transform.translation;
+            if distance > pending.max_range {
+                // MISS: враг увернулся — только slash VFX, без попадания
+                slash_vfx::spawn_slash(
+                    &mut commands, &slash_assets, &mut materials,
+                    player_pos, pending.direction,
+                );
+                damage_numbers::spawn_miss_text(
+                    &mut commands, &asset_server,
+                    enemy_pos,
+                );
+                debug!(
+                    "⚔️ Player MISSES enemy! (distance {:.1} > max_range {:.1})",
+                    distance, pending.max_range
+                );
+            } else if !health.is_dead() {
+                health.take_damage(pending.damage);
 
                 // VFX: Slash огненная дуга перед игроком
                 slash_vfx::spawn_slash(

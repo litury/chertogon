@@ -1,6 +1,6 @@
 use bevy::prelude::*;
+use bevy::ui::UiScale;
 use crate::toolkit::asset_paths;
-use crate::modules::selection::components::PortraitCamera;
 
 /// Всплывающее число урона (UI-based, проецируется из 3D в экранные координаты)
 #[derive(Component)]
@@ -57,15 +57,58 @@ pub fn spawn_damage_number(
     ));
 }
 
+/// Спавнит текст "MISS" — промах (серый, мельче, та же анимация что damage number)
+pub fn spawn_miss_text(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    position: Vec3,
+) {
+    let font = asset_server.load(asset_paths::FONT_UI_BOLD);
+
+    let seed = (position.x * 73.7 + position.z * 31.3).sin();
+    let x_spread = seed * 1.5;
+
+    let base_font_size = 22.0;
+
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
+            ..default()
+        },
+        Text::new("MISS"),
+        TextFont {
+            font,
+            font_size: base_font_size * 1.5,
+            ..default()
+        },
+        TextColor(Color::srgb(0.7, 0.7, 0.8)),
+        TextShadow {
+            offset: Vec2::new(1.5, 1.5),
+            color: Color::srgba(0.0, 0.0, 0.0, 0.9),
+        },
+        Visibility::Hidden,
+        DamageNumber {
+            timer: Timer::from_seconds(0.6, TimerMode::Once),
+            world_position: position + Vec3::new(x_spread * 0.3, 2.0, 0.0),
+            velocity: Vec3::new(x_spread, 3.0, 0.0),
+            base_font_size,
+        },
+    ));
+}
+
 /// Проецирует 3D позицию в экранные координаты, анимирует и despawn'ит
 pub fn damage_number_system(
     time: Res<Time>,
-    camera_query: Query<(&Camera, &GlobalTransform), (With<Camera3d>, Without<PortraitCamera>)>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut query: Query<(Entity, &mut DamageNumber, &mut Node, &mut TextFont, &mut TextColor, &mut Visibility)>,
     mut commands: Commands,
+    ui_scale: Res<UiScale>,
 ) {
     let Ok((camera, cam_transform)) = camera_query.single() else { return };
     let dt = time.delta_secs();
+    let scale = ui_scale.0.max(0.01);
 
     for (entity, mut dmg, mut node, mut text_font, mut color, mut visibility) in &mut query {
         dmg.timer.tick(time.delta());
@@ -76,11 +119,11 @@ pub fn damage_number_system(
         let vel = dmg.velocity;
         dmg.world_position += vel * dt;
 
-        // Проецируем 3D → экран
+        // Проецируем 3D → экран (компенсация UiScale)
         if let Ok(screen_pos) = camera.world_to_viewport(cam_transform, dmg.world_position) {
             *visibility = Visibility::Inherited;
-            node.left = Val::Px(screen_pos.x);
-            node.top = Val::Px(screen_pos.y);
+            node.left = Val::Px(screen_pos.x / scale);
+            node.top = Val::Px(screen_pos.y / scale);
         } else {
             // За пределами экрана — убираем
             commands.entity(entity).despawn();
