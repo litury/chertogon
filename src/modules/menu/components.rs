@@ -43,3 +43,19 @@ pub struct TimerText;
 /// Маркер загрузочного overlay (скрывает 3D-сцену до готовности UI)
 #[derive(Component)]
 pub struct LoadingOverlay;
+
+/// Маркер для заполненной части HP бара
+#[derive(Component)]
+pub struct HpBarFill;
+
+/// Маркер для текста HP значения
+#[derive(Component)]
+pub struct HpBarText;
+
+/// Маркер для заполненной части XP бара
+#[derive(Component)]
+pub struct XpBarFill;
+
+/// Маркер для текста уровня
+#[derive(Component)]
+pub struct LevelText;

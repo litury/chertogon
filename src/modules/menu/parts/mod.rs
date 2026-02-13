@@ -13,3 +13,4 @@ pub mod fps_counter;
 pub mod button_hover;
 pub mod fade_transition;
 pub mod font_diagnostics;
+pub mod adaptive_scale;

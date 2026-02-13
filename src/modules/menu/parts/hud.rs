@@ -2,11 +2,13 @@ use bevy::prelude::*;
 use crate::modules::menu::components::*;
 use crate::modules::combat::parts::game_over::KillCount;
 use crate::modules::combat::parts::game_timer::GameTimer;
+use crate::modules::combat::components::PlayerHealth;
 use crate::modules::enemies::components::WaveState;
+use crate::modules::player::components::Player;
+use crate::modules::progression::components::PlayerXp;
 use crate::toolkit::asset_paths;
 
-/// Создаёт минималистичный HUD: волна (лево) + таймер/убийства (право)
-/// Адаптивный padding (Val::Percent) для мобильных экранов
+/// Создаёт HUD: волна (лево) + таймер/убийства (право) + HP bar + XP bar
 pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font_ui_bold = asset_server.load(asset_paths::FONT_UI_BOLD);
     let font_ui = asset_server.load(asset_paths::FONT_UI);
@@ -24,22 +26,77 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     )).with_children(|parent| {
-        // Left: Волна
+        // Left column: Волна + HP bar
         parent.spawn((
             HudUI,
-            WaveIndicatorText,
-            Text::new("Волна: 1"),
-            TextFont {
-                font: font_ui_bold,
-                font_size: 24.0,
+            Node {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::FlexStart,
+                row_gap: Val::Px(8.0),
                 ..default()
             },
-            TextColor(Color::srgb(0.95, 0.7, 0.2)),
-            TextShadow {
-                offset: Vec2::new(2.0, 2.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.85),
-            },
-        ));
+        )).with_children(|left| {
+            // Волна
+            left.spawn((
+                HudUI,
+                WaveIndicatorText,
+                Text::new("Волна: 1"),
+                TextFont {
+                    font: font_ui_bold.clone(),
+                    font_size: 24.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.95, 0.7, 0.2)),
+                TextShadow {
+                    offset: Vec2::new(2.0, 2.0),
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.85),
+                },
+            ));
+
+            // HP bar container
+            left.spawn((
+                HudUI,
+                Node {
+                    width: Val::Px(200.0),
+                    height: Val::Px(18.0),
+                    border: UiRect::all(Val::Px(1.0)),
+                    border_radius: BorderRadius::all(Val::Px(3.0)),
+                    ..default()
+                },
+                BorderColor::all(Color::srgb(0.7, 0.5, 0.2)),
+                BackgroundColor(Color::srgba(0.1, 0.05, 0.05, 0.7)),
+            )).with_children(|bar| {
+                // HP fill
+                bar.spawn((
+                    HudUI,
+                    HpBarFill,
+                    Node {
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        border_radius: BorderRadius::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.8, 0.15, 0.1)),
+                ));
+            });
+
+            // HP text
+            left.spawn((
+                HudUI,
+                HpBarText,
+                Text::new("100/100"),
+                TextFont {
+                    font: font_ui.clone(),
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.9, 0.85, 0.8)),
+                TextShadow {
+                    offset: Vec2::new(1.0, 1.0),
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.9),
+                },
+            ));
+        });
 
         // Right column: Таймер + Убийства
         parent.spawn((
@@ -51,7 +108,6 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
         )).with_children(|right| {
-            // Таймер
             right.spawn((
                 HudUI,
                 TimerText,
@@ -68,13 +124,12 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
             ));
 
-            // Убийства
             right.spawn((
                 HudUI,
                 KillCounterText,
                 Text::new("Убито: 0"),
                 TextFont {
-                    font: font_ui,
+                    font: font_ui.clone(),
                     font_size: 20.0,
                     ..default()
                 },
@@ -83,6 +138,65 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                     offset: Vec2::new(2.0, 2.0),
                     color: Color::srgba(0.0, 0.0, 0.0, 0.85),
                 },
+            ));
+        });
+    });
+
+    // XP bar — нижний центр (отдельный absolute root)
+    commands.spawn((
+        HudUI,
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Percent(3.0),
+            left: Val::Percent(25.0),
+            width: Val::Percent(50.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: Val::Px(4.0),
+            ..default()
+        },
+    )).with_children(|xp_root| {
+        // Текст уровня
+        xp_root.spawn((
+            HudUI,
+            LevelText,
+            Text::new("Уровень 1"),
+            TextFont {
+                font: font_ui_bold,
+                font_size: 16.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.4, 0.9, 0.5)),
+            TextShadow {
+                offset: Vec2::new(1.0, 1.0),
+                color: Color::srgba(0.0, 0.0, 0.0, 0.9),
+            },
+        ));
+
+        // XP bar container
+        xp_root.spawn((
+            HudUI,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(12.0),
+                border: UiRect::all(Val::Px(1.0)),
+                border_radius: BorderRadius::all(Val::Px(3.0)),
+                ..default()
+            },
+            BorderColor::all(Color::srgb(0.3, 0.6, 0.3)),
+            BackgroundColor(Color::srgba(0.05, 0.1, 0.05, 0.7)),
+        )).with_children(|bar| {
+            // XP fill
+            bar.spawn((
+                HudUI,
+                XpBarFill,
+                Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    border_radius: BorderRadius::all(Val::Px(2.0)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgb(0.2, 0.8, 0.3)),
             ));
         });
     });
@@ -119,6 +233,42 @@ pub fn update_timer_text(
         for mut text in &mut query {
             **text = game_timer.formatted();
         }
+    }
+}
+
+/// Обновляет HP bar (ширина fill + текст)
+pub fn update_hp_bar(
+    player_query: Query<&PlayerHealth, With<Player>>,
+    mut hp_fill: Query<&mut Node, (With<HpBarFill>, Without<HpBarText>)>,
+    mut hp_text: Query<&mut Text, (With<HpBarText>, Without<HpBarFill>)>,
+) {
+    let Ok(health) = player_query.single() else {
+        warn!("update_hp_bar: Player entity not found!");
+        return;
+    };
+    let fraction = (health.current / health.max).clamp(0.0, 1.0);
+
+    for mut node in &mut hp_fill {
+        node.width = Val::Percent(fraction * 100.0);
+    }
+    for mut text in &mut hp_text {
+        **text = format!("{}/{}", health.current as i32, health.max as i32);
+    }
+}
+
+/// Обновляет XP bar (ширина fill + текст уровня)
+pub fn update_xp_bar(
+    player_xp: Res<PlayerXp>,
+    mut xp_fill: Query<&mut Node, (With<XpBarFill>, Without<LevelText>)>,
+    mut level_text: Query<&mut Text, (With<LevelText>, Without<XpBarFill>)>,
+) {
+    let fraction = (player_xp.current_xp / player_xp.xp_to_next).clamp(0.0, 1.0);
+
+    for mut node in &mut xp_fill {
+        node.width = Val::Percent(fraction * 100.0);
+    }
+    for mut text in &mut level_text {
+        **text = format!("Уровень {}", player_xp.level);
     }
 }
 

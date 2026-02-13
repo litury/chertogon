@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
-use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics};
+use crate::modules::enemies::EnemyCoreSet;
+use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics, adaptive_scale};
 
 pub struct MenuPlugin;
 
@@ -24,7 +25,7 @@ impl Plugin for MenuPlugin {
             .add_systems(OnExit(GameState::TitleScreen), title_screen::cleanup_title_screen)
             // HUD
             .add_systems(OnEnter(GameState::Playing), (hud::setup_hud, fps_counter::setup_fps))
-            .add_systems(Update, (hud::update_hud, hud::update_timer_text, fps_counter::update_fps).run_if(in_state(GameState::Playing)))
+            .add_systems(Update, (hud::update_hud, hud::update_timer_text, hud::update_hp_bar, hud::update_xp_bar, fps_counter::update_fps).after(EnemyCoreSet).run_if(in_state(GameState::Playing)))
             .add_systems(OnExit(GameState::Playing), (hud::cleanup_hud, fps_counter::cleanup_fps))
             // Game Over
             .add_systems(OnEnter(GameState::GameOver), game_over_screen::setup_game_over)
@@ -32,7 +33,9 @@ impl Plugin for MenuPlugin {
                 .run_if(in_state(GameState::GameOver)))
             .add_systems(OnExit(GameState::GameOver), game_over_screen::cleanup_game_over)
             // Button hover — работает на всех экранах с кнопками
-            .add_systems(Update, button_hover::button_hover_system);
+            .add_systems(Update, button_hover::button_hover_system)
+            // Адаптивный UI масштаб (mobile/desktop)
+            .add_systems(Update, adaptive_scale::adaptive_ui_scale_system);
 
         info!("MenuPlugin loaded (title + HUD + game over)");
     }
