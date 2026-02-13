@@ -31,10 +31,12 @@ impl Health {
 }
 
 /// Тип врага
-#[derive(Component, Clone, Copy, Reflect)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
 #[reflect(Component)]
 pub enum EnemyType {
-    Upyr,   // Упырь — славянский зомби (MVP)
+    Upyr,      // Упырь — славянский зомби (медленный, HP 20)
+    Leshiy,    // Леший — лесной дух (быстрый фланкер, HP 15)
+    Volkolak,  // Волколак — четвероногий хищник (быстрый, HP 12)
 }
 
 /// Маркер для визуальной модели врага (child entity)
@@ -47,8 +49,11 @@ pub struct EnemyModel;
 pub struct EnemyAnimations {
     pub idle: AnimationNodeIndex,
     pub walk: AnimationNodeIndex,
+    pub run: AnimationNodeIndex,
     pub attack: AnimationNodeIndex,
     pub death: AnimationNodeIndex,
+    pub hit: AnimationNodeIndex,
+    pub scream: AnimationNodeIndex,
 }
 
 /// Маркер завершения настройки анимаций врага
@@ -67,7 +72,10 @@ pub struct EnemyAnimState {
 pub enum EnemyAnim {
     Idle,
     Walking,
+    Running,
     Attacking,
+    HitReaction,
+    Screaming,
     Dying,
 }
 
@@ -82,6 +90,20 @@ pub struct EnemyDying {
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct EnemyCorpse;
+
+/// Таймер повтора анимации атаки (пока враг в Attacking состоянии)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct EnemyAttackAnimTimer {
+    pub timer: Timer,
+}
+
+/// Таймер крика при спавне — враг кричит и не двигается
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct SpawnScream {
+    pub timer: Timer,
+}
 
 /// AI врага: преследование + агро-зона + атака
 #[derive(Component, Reflect)]

@@ -47,13 +47,17 @@ fn setup_anim_player(
     model_child: Entity,
     commands: &mut Commands,
 ) {
-    info!("✅ Enemy AnimationPlayer found!");
+    info!("✅ Enemy AnimationPlayer found on {:?}! idle={:?}, walk={:?}, run={:?}, attack={:?}",
+          entity, anim_indices.idle, anim_indices.walk, anim_indices.run, anim_indices.attack);
 
     let animations = EnemyAnimations {
         idle: anim_indices.idle,
         walk: anim_indices.walk,
+        run: anim_indices.run,
         attack: anim_indices.attack,
         death: anim_indices.death,
+        hit: anim_indices.hit,
+        scream: anim_indices.scream,
     };
 
     commands.entity(entity).insert(animations);
@@ -62,7 +66,10 @@ fn setup_anim_player(
     let (anim_index, should_loop) = match current_anim {
         EnemyAnim::Idle => (animations.idle, true),
         EnemyAnim::Walking => (animations.walk, true),
+        EnemyAnim::Running => (animations.run, true),
         EnemyAnim::Attacking => (animations.attack, false),
+        EnemyAnim::HitReaction => (animations.hit, false),
+        EnemyAnim::Screaming => (animations.scream, false),
         EnemyAnim::Dying => (animations.death, false),
     };
     let mut transitions = AnimationTransitions::new();
@@ -124,7 +131,10 @@ fn try_update_animation(
     let (animation_index, should_loop) = match anim_state.current {
         EnemyAnim::Idle => (animations.idle, true),
         EnemyAnim::Walking => (animations.walk, true),
+        EnemyAnim::Running => (animations.run, true),
         EnemyAnim::Attacking => (animations.attack, false),
+        EnemyAnim::HitReaction => (animations.hit, false),
+        EnemyAnim::Screaming => (animations.scream, false),
         EnemyAnim::Dying => (animations.death, false),
     };
 
@@ -134,4 +144,77 @@ fn try_update_animation(
     }
 
     true
+}
+
+/// Повторяет анимацию атаки пока враг в Attacking состоянии.
+/// Синхронизирован с EnemyAttackCooldown (1.0с) — каждый удар имеет визуальный фидбек.
+pub fn enemy_attack_anim_replay_system(
+    time: Res<Time>,
+    mut enemies: Query<
+        (&mut EnemyAttackAnimTimer, &Children),
+        (With<Enemy>, Without<EnemyDying>)
+    >,
+    model_query: Query<&Children, With<EnemyModel>>,
+    children_query: Query<&Children>,
+    mut animation_query: Query<
+        (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
+        With<EnemyAnimationSetupComplete>
+    >,
+) {
+    for (mut anim_timer, enemy_children) in &mut enemies {
+        anim_timer.timer.tick(time.delta());
+
+        if !anim_timer.timer.just_finished() {
+            continue;
+        }
+
+        // Переигрываем анимацию атаки через ту же иерархию
+        'enemy: for &child in enemy_children {
+            if let Ok(model_children) = model_query.get(child) {
+                for &mc in model_children {
+                    if try_replay_attack(&mut animation_query, mc) {
+                        break 'enemy;
+                    }
+                    if let Ok(grandchildren) = children_query.get(mc) {
+                        for &gc in grandchildren {
+                            if try_replay_attack(&mut animation_query, gc) {
+                                break 'enemy;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn try_replay_attack(
+    animation_query: &mut Query<
+        (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
+        With<EnemyAnimationSetupComplete>
+    >,
+    entity: Entity,
+) -> bool {
+    let Ok((animations, mut player, mut transitions)) = animation_query.get_mut(entity) else {
+        return false;
+    };
+
+    transitions.play(&mut player, animations.attack, Duration::from_millis(150));
+
+    true
+}
+
+/// Система: тикает таймер крика при спавне, по завершении переводит в Idle
+pub fn spawn_scream_decay_system(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut SpawnScream, &mut EnemyAnimState), With<Enemy>>,
+    mut commands: Commands,
+) {
+    for (entity, mut scream, mut anim_state) in &mut query {
+        scream.timer.tick(time.delta());
+        if scream.timer.is_finished() {
+            anim_state.current = EnemyAnim::Idle;
+            commands.entity(entity).remove::<SpawnScream>();
+        }
+    }
 }

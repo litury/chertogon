@@ -3,19 +3,21 @@ use avian3d::prelude::*;
 use crate::modules::player::components::Player;
 use crate::modules::enemies::components::*;
 use crate::modules::combat::components::EnemyAttackCooldown;
-use crate::modules::combat::parts::knockback::Staggered;
+use crate::modules::combat::parts::knockback::{Staggered, StaggerRecovery};
 use crate::modules::world::GroundCircle;
 use crate::modules::combat::parts::game_over::KillCount;
+use bevy::ecs::system::Commands;
 
 /// Система AI: враги реагируют на игрока по дистанции
 /// - Далеко (> aggro_range): стоит на месте (Idle)
 /// - Средне (attack_range..aggro_range): преследует (Walking)
 /// - Близко (<= attack_range): атакует (Attacking)
 pub fn enemy_ai_system(
+    mut commands: Commands,
     time: Res<Time>,
     mut enemies: Query<
-        (&ChasePlayer, &Children, &Transform, &mut LinearVelocity, &mut EnemyAnimState),
-        (With<Enemy>, Without<Player>, Without<EnemyDying>, Without<Staggered>)
+        (Entity, &ChasePlayer, &Health, &Children, &Transform, &mut LinearVelocity, &mut EnemyAnimState),
+        (With<Enemy>, Without<Player>, Without<EnemyDying>, Without<Staggered>, Without<StaggerRecovery>, Without<SpawnScream>)
     >,
     player: Query<&Transform, With<Player>>,
     mut model_query: Query<&mut Transform, (With<EnemyModel>, Without<Enemy>, Without<Player>)>,
@@ -26,7 +28,7 @@ pub fn enemy_ai_system(
 
     let player_pos = player_transform.translation;
 
-    for (chase, children, enemy_transform, mut velocity, mut anim_state) in &mut enemies {
+    for (entity, chase, health, children, enemy_transform, mut velocity, mut anim_state) in &mut enemies {
         let enemy_pos = enemy_transform.translation;
         let distance = (player_pos - enemy_pos).length();
 
@@ -34,14 +36,18 @@ pub fn enemy_ai_system(
         let direction = (player_pos - enemy_pos).normalize_or_zero();
         let direction_2d = Vec3::new(direction.x, 0.0, direction.z).normalize_or_zero();
 
+        // Enrage: при HP < 30% — бежит вдвое быстрее
+        let is_enraged = health.current / health.max < 0.3;
+        let move_speed = if is_enraged { chase.speed * 2.0 } else { chase.speed };
+
         let new_state = if distance <= chase.attack_range {
             // Близко — атакуем, стоим на месте
             velocity.0 = Vec3::ZERO;
             EnemyAnim::Attacking
         } else if distance <= chase.aggro_range {
             // В зоне агро — преследуем
-            velocity.0 = direction_2d * chase.speed;
-            EnemyAnim::Walking
+            velocity.0 = direction_2d * move_speed;
+            if is_enraged { EnemyAnim::Running } else { EnemyAnim::Walking }
         } else {
             // Далеко — стоим и ждём
             velocity.0 = Vec3::ZERO;
@@ -51,6 +57,15 @@ pub fn enemy_ai_system(
         // Обновляем состояние только если изменилось (Changed<> фильтр в анимации)
         if anim_state.current != new_state {
             anim_state.current = new_state;
+
+            // Управляем таймером повтора анимации атаки
+            if new_state == EnemyAnim::Attacking {
+                commands.entity(entity).insert(EnemyAttackAnimTimer {
+                    timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+                });
+            } else {
+                commands.entity(entity).remove::<EnemyAttackAnimTimer>();
+            }
         }
 
         // Поворачиваем child модель лицом к игроку (только в агро)
