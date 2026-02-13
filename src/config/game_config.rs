@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::asset::AssetMetaCheck;
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::winit::WinitSettings;
 use avian3d::prelude::*;
 
@@ -35,7 +35,6 @@ pub fn configure_app(app: &mut App) {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.04, 0.08)))  // Тьма за ареной (совпадает с туманом)
         .insert_resource(SubstepCount(3))     // ✅ 3 подшага для точных коллизий на высоких скоростях
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
-        .add_plugins(LogDiagnosticsPlugin::default())
         .init_state::<crate::shared::GameState>();
 
     #[cfg(target_arch = "wasm32")]
