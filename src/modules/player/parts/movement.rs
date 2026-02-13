@@ -1,17 +1,17 @@
 use bevy::prelude::*;
 use avian3d::prelude::*;
 use crate::modules::{Player, PlayerModel, InputState};
+use crate::modules::player::components::PlayerStats;
 use crate::shared::constants::{WALK_SPEED, RUN_SPEED};
 
-/// ✅ Движение через LinearVelocity - правильный способ для Kinematic bodies
-/// Основано на официальном примере Avian3D: kinematic_character_3d
+/// Движение через LinearVelocity с учётом модификатора скорости от апгрейдов
 pub fn player_movement_system(
     input_state: Res<InputState>,
     time: Res<Time>,
-    mut player_query: Query<(&Children, &mut LinearVelocity, &mut Transform), With<Player>>,
+    mut player_query: Query<(&Children, &mut LinearVelocity, &mut Transform, &PlayerStats), With<Player>>,
     mut model_query: Query<&mut Transform, (With<PlayerModel>, Without<Player>)>,
 ) {
-    if let Ok((children, mut velocity, mut player_transform)) = player_query.single_mut() {
+    if let Ok((children, mut velocity, mut player_transform, stats)) = player_query.single_mut() {
         // Страховка: сбрасываем rotation parent entity (physics body не должен вращаться)
         player_transform.rotation = Quat::IDENTITY;
         if input_state.movement.length() > 0.02 {
@@ -19,7 +19,7 @@ pub fn player_movement_system(
                 RUN_SPEED
             } else {
                 WALK_SPEED
-            };
+            } * stats.move_speed_multiplier;
 
             velocity.0 = input_state.movement.normalize() * speed;
 

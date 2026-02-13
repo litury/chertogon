@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use std::time::Duration;
 use avian3d::prelude::*;  // ✅ Добавляем импорт физики (RigidBody, Collider)
-use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete};
+use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete, PlayerStats};
 use crate::modules::combat::components::{Weapon, AttackCooldown, PlayerHealth};
-use crate::modules::world::GroundCircle;
+use crate::modules::world::{GroundCircle, CooldownRing};
 use crate::toolkit::asset_paths;
 
 /// Временный компонент для передачи индексов анимаций от spawn к setup
@@ -77,12 +77,15 @@ pub fn spawn_player(
         Weapon::default(),
         AttackCooldown::new(1.0),
         PlayerHealth::new(100.0),
+        PlayerStats::default(),
     )).id();
 
     // Создаем ВИЗУАЛЬНЫЙ child с SceneRoot
     let model_child = commands.spawn((
         SceneRoot(scene),
-        Transform::from_xyz(0.0, -0.9, 0.0),  // ✅ Опускаем модель вниз - ноги на полу
+        Transform::from_xyz(0.0, -0.9, 0.0)  // ✅ Опускаем модель вниз - ноги на полу
+            .with_rotation(Quat::from_rotation_y(std::f32::consts::PI)),  // Лицом от камеры (-Z = верх экрана)
+        Visibility::Hidden,  // Скрыт до загрузки GLB (убирает "поп-ин")
         PlayerModel,
         // Временный компонент для передачи индексов в setup_scene_animation
         AnimationIndices {
@@ -121,6 +124,29 @@ pub fn spawn_player(
         },
     )).id();
 
+    // Cooldown ring — тонкое голубое кольцо перезарядки оружия (внутри HP ring)
+    let cd_mesh = meshes.add(Annulus::new(0.50, 0.62)); // Будет заменён на arc в первом кадре
+    let cd_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.3, 0.7, 1.0, 0.5),
+        emissive: LinearRgba::new(0.2, 0.5, 1.0, 0.0) * 3.0,
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    });
+    let cooldown_ring = commands.spawn((
+        Mesh3d(cd_mesh),
+        MeshMaterial3d(cd_material.clone()),
+        Transform::from_xyz(0.0, -0.885, 0.0)
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        CooldownRing {
+            inner_radius: 0.50,
+            outer_radius: 0.62,
+            material_handle: cd_material,
+            last_fraction: -1.0,
+            last_facing: 0.0,
+        },
+    )).id();
+
     // Point light — тёплый свет вокруг игрока для контраста с тёмным полом
     let player_light = commands.spawn((
         PointLight {
@@ -136,9 +162,10 @@ pub fn spawn_player(
     // Связываем parent-child
     commands.entity(player_entity).add_child(model_child);
     commands.entity(player_entity).add_child(ground_circle);
+    commands.entity(player_entity).add_child(cooldown_ring);
     commands.entity(player_entity).add_child(player_light);
 
-    info!("✅ Created Player entity with PlayerModel child + ground circle + light");
+    info!("✅ Created Player entity with PlayerModel child + ground circle + cooldown ring + light");
 }
 
 /// Система настройки AnimationPlayer после загрузки GLB
@@ -187,6 +214,9 @@ pub fn setup_scene_animation(
 
                     // Маркер завершения (предотвращает повторное выполнение)
                     commands.entity(entity).insert(AnimationSetupComplete);
+
+                    // Показываем модель (была Hidden до загрузки GLB)
+                    commands.entity(model_child).insert(Visibility::Inherited);
 
                     // Удаляем временный компонент
                     commands.entity(model_child).remove::<AnimationIndices>();

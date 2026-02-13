@@ -61,6 +61,21 @@ pub struct StaggerCooldown {
     pub timer: Timer,
 }
 
+/// Модифицируемые характеристики игрока (базовые + бонусы от апгрейдов)
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct PlayerStats {
+    pub move_speed_multiplier: f32,
+}
+
+impl Default for PlayerStats {
+    fn default() -> Self {
+        Self {
+            move_speed_multiplier: 1.0,
+        }
+    }
+}
+
 /// Маркер для entity оружия (child кости RightHand)
 #[derive(Component, Reflect)]
 #[reflect(Component)]
