@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use chertogon::config::game_config;
-use chertogon::modules::{WorldPlugin, InputPlugin, PlayerPlugin, CameraPlugin, EnemiesPlugin, CombatPlugin, MenuPlugin, SelectionPlugin};
+use chertogon::modules::{WorldPlugin, InputPlugin, PlayerPlugin, CameraPlugin, EnemiesPlugin, CombatPlugin, MenuPlugin, SelectionPlugin, ProgressionPlugin};
 
 fn main() {
     let mut app = App::new();
@@ -18,6 +18,7 @@ fn main() {
         CombatPlugin,
         MenuPlugin,
         SelectionPlugin,
+        ProgressionPlugin,
     ));
 
     app.run();
