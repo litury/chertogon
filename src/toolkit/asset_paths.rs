@@ -57,6 +57,12 @@ pub const FOG_NOISE: &str = "volumes/fog_noise.ktx2";
 // Оружие
 pub const SWORD_MODEL: &str = "models/weapons/runic_sword.glb#Scene0";
 
+// Портреты персонажей (AI-generated, nano-banana)
+pub const PORTRAIT_BOGATYR: &str = "textures/ui/portraits/bogatyr_portrait.png";
+pub const PORTRAIT_UPYR: &str = "textures/ui/portraits/upyr_portrait.png";
+pub const PORTRAIT_LESHIY: &str = "textures/ui/portraits/leshiy_portrait.png";
+pub const PORTRAIT_VOLKOLAK: &str = "textures/ui/portraits/volkolak_portrait.png";
+
 // UI фоны
 pub const TITLE_BG: &str = "textures/ui/title_bg.jpg";
 pub const GAMEOVER_BG: &str = "textures/ui/gameover_bg.jpg";

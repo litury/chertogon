@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
 use super::components::*;
-use super::parts::{tap_detection, picking, panel, portrait};
+use super::parts::{tap_detection, picking, panel};
 
 pub struct SelectionPlugin;
 
@@ -11,23 +11,17 @@ impl Plugin for SelectionPlugin {
             .init_resource::<SelectionState>()
             .init_resource::<tap_detection::TapTracker>()
             .add_message::<SelectionTapEvent>()
-            // Основной цикл: детекция → пикинг → панель → портрет
+            // Основной цикл: детекция → пикинг → панель
             .add_systems(Update, (
                 tap_detection::detect_selection_tap,
-                picking::pick_enemy_at_screen_pos,
+                picking::pick_character_at_screen_pos,
                 panel::manage_selection_panel,
                 panel::update_selection_panel,
-                portrait::update_portrait_model,
-                portrait::setup_portrait_animation,
-                portrait::propagate_portrait_layers,
                 picking::clear_dead_selection,
             ).chain().run_if(in_state(GameState::Playing)))
-            // Инициализация портретной камеры
-            .add_systems(OnEnter(GameState::Playing), portrait::setup_portrait_camera)
             // Чистка при выходе
             .add_systems(OnExit(GameState::Playing), (
                 panel::cleanup_selection_panel,
-                portrait::cleanup_portrait,
                 reset_selection,
             ));
 

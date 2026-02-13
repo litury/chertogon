@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use crate::modules::enemies::components::{Enemy, EnemyType, Health, ChasePlayer};
-use crate::modules::combat::components::EnemyAttackCooldown;
+use crate::modules::combat::components::{EnemyAttackCooldown, PlayerHealth, Weapon};
+use crate::modules::player::Player;
 use crate::modules::selection::components::*;
+use crate::modules::selection::parts::portrait;
 use crate::toolkit::asset_paths;
 
 /// Пересоздаёт панель выделения при изменении SelectionState.
@@ -11,10 +13,10 @@ pub fn manage_selection_panel(
         (&EnemyType, &Health, &ChasePlayer, &EnemyAttackCooldown),
         With<Enemy>,
     >,
+    players: Query<(&PlayerHealth, &Weapon), With<Player>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     existing_panels: Query<Entity, With<SelectionPanelUI>>,
-    portrait_target: Option<Res<PortraitRenderTarget>>,
 ) {
     if !selection.is_changed() {
         return;
@@ -26,34 +28,37 @@ pub fn manage_selection_panel(
     }
 
     let Some(selected) = selection.selected_entity else { return };
-    let Ok((enemy_type, health, chase, attack_cd)) = enemies.get(selected) else { return };
 
-    let font_title = asset_server.load(asset_paths::FONT_TITLE);
-    let font_ui = asset_server.load(asset_paths::FONT_UI);
-    let font_ui_bold = asset_server.load(asset_paths::FONT_UI_BOLD);
+    if let Ok((enemy_type, health, chase, attack_cd)) = enemies.get(selected) {
+        let portrait_path = portrait::portrait_for_enemy(enemy_type);
+        build_enemy_panel(
+            &mut commands, &asset_server, portrait_path,
+            enemy_type, health, chase, attack_cd,
+        );
+    } else if let Ok((player_health, weapon)) = players.get(selected) {
+        let portrait_path = portrait::portrait_for_player();
+        build_player_panel(
+            &mut commands, &asset_server, portrait_path,
+            player_health, weapon,
+        );
+    }
+}
 
-    let name = match enemy_type {
-        EnemyType::Upyr => "Упырь",
-        EnemyType::Leshiy => "Леший",
-        EnemyType::Volkolak => "Волколак",
-    };
+/// Общий каркас панели (root + portrait + info column)
+fn spawn_panel_root(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    portrait_path: &str,
+) -> Entity {
+    let portrait_handle: Handle<Image> = asset_server.load(portrait_path.to_string());
 
-    let hp_color = match enemy_type {
-        EnemyType::Upyr => Color::srgb(0.8, 0.15, 0.1),
-        EnemyType::Leshiy => Color::srgb(0.15, 0.7, 0.2),
-        EnemyType::Volkolak => Color::srgb(0.5, 0.5, 0.65),
-    };
-
-    let hp_fraction = (health.current / health.max).clamp(0.0, 1.0);
-
-    // Root: absolute bottom-center
     commands.spawn((
         SelectionPanelUI,
         Node {
             position_type: PositionType::Absolute,
             bottom: Val::Px(16.0),
             left: Val::Percent(50.0),
-            margin: UiRect::left(Val::Px(-170.0)), // center: half of width
+            margin: UiRect::left(Val::Px(-170.0)),
             width: Val::Px(340.0),
             padding: UiRect::all(Val::Px(10.0)),
             flex_direction: FlexDirection::Row,
@@ -88,174 +93,212 @@ pub fn manage_selection_panel(
             BorderColor::all(Color::srgba(0.95, 0.7, 0.2, 0.4)),
         );
 
-        if let Some(ref target) = portrait_target {
-            parent.spawn((
-                portrait_node,
-                ImageNode::new(target.0.clone()),
-            ));
-        } else {
-            parent.spawn((
-                portrait_node,
-                BackgroundColor(Color::srgba(0.15, 0.1, 0.2, 0.8)),
-            ));
-        }
-
-        // Info column
         parent.spawn((
+            portrait_node,
+            ImageNode::new(portrait_handle),
+        ));
+    }).id()
+}
+
+/// Спавнит info-колонку внутри root
+fn spawn_info_column(
+    commands: &mut Commands,
+    root: Entity,
+    name: &str,
+    hp_current: f32,
+    hp_max: f32,
+    hp_color: Color,
+    stats: &[(&str, String)],
+    asset_server: &AssetServer,
+) {
+    let font_title = asset_server.load(asset_paths::FONT_TITLE);
+    let font_ui = asset_server.load(asset_paths::FONT_UI);
+    let font_ui_bold = asset_server.load(asset_paths::FONT_UI_BOLD);
+    let hp_fraction = (hp_current / hp_max).clamp(0.0, 1.0);
+
+    let info_column = commands.spawn((
+        SelectionPanelUI,
+        Node {
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(4.0),
+            flex_grow: 1.0,
+            ..default()
+        },
+    )).with_children(|info| {
+        // Имя
+        info.spawn((
+            SelectionPanelUI,
+            Text::new(name),
+            TextFont { font: font_title, font_size: 22.0, ..default() },
+            TextColor(Color::srgb(0.95, 0.7, 0.2)),
+            TextShadow {
+                offset: Vec2::new(1.5, 1.5),
+                color: Color::srgba(0.0, 0.0, 0.0, 0.85),
+            },
+        ));
+
+        // HP бар
+        info.spawn((
             SelectionPanelUI,
             Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(4.0),
-                flex_grow: 1.0,
+                width: Val::Percent(100.0),
+                height: Val::Px(14.0),
+                border_radius: BorderRadius::all(Val::Px(3.0)),
+                overflow: Overflow::clip(),
                 ..default()
             },
-        )).with_children(|info| {
-            // Имя врага
-            info.spawn((
+            BackgroundColor(Color::srgba(0.1, 0.08, 0.15, 0.8)),
+        )).with_children(|bar| {
+            bar.spawn((
                 SelectionPanelUI,
-                Text::new(name),
-                TextFont {
-                    font: font_title,
-                    font_size: 22.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.95, 0.7, 0.2)),
-                TextShadow {
-                    offset: Vec2::new(1.5, 1.5),
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.85),
-                },
-            ));
-
-            // HP бар контейнер
-            info.spawn((
-                SelectionPanelUI,
+                SelectionHpFill,
                 Node {
-                    width: Val::Percent(100.0),
-                    height: Val::Px(14.0),
+                    width: Val::Percent(hp_fraction * 100.0),
+                    height: Val::Percent(100.0),
                     border_radius: BorderRadius::all(Val::Px(3.0)),
-                    overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.1, 0.08, 0.15, 0.8)),
-            )).with_children(|bar| {
-                // HP заполнение
-                bar.spawn((
-                    SelectionPanelUI,
-                    SelectionHpFill,
-                    Node {
-                        width: Val::Percent(hp_fraction * 100.0),
-                        height: Val::Percent(100.0),
-                        border_radius: BorderRadius::all(Val::Px(3.0)),
-                        ..default()
-                    },
-                    BackgroundColor(hp_color),
-                ));
-            });
-
-            // HP текст
-            info.spawn((
-                SelectionPanelUI,
-                SelectionHpText,
-                Text::new(format!("{} / {}", health.current as i32, health.max as i32)),
-                TextFont {
-                    font: font_ui_bold,
-                    font_size: 14.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.85, 0.8, 0.7)),
-                TextShadow {
-                    offset: Vec2::new(1.0, 1.0),
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.7),
-                },
+                BackgroundColor(hp_color),
             ));
-
-            // Статы: Урон | Скорость | Дальность
-            info.spawn((
-                SelectionPanelUI,
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    column_gap: Val::Px(16.0),
-                    margin: UiRect::top(Val::Px(2.0)),
-                    ..default()
-                },
-            )).with_children(|stats| {
-                let stat_style = TextFont {
-                    font: font_ui.clone(),
-                    font_size: 13.0,
-                    ..default()
-                };
-                let stat_color = TextColor(Color::srgb(0.65, 0.6, 0.55));
-                let stat_shadow = TextShadow {
-                    offset: Vec2::new(1.0, 1.0),
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.6),
-                };
-
-                // Урон
-                stats.spawn((
-                    SelectionPanelUI,
-                    Text::new(format!("Урон: {:.0}", attack_cd.damage)),
-                    stat_style.clone(),
-                    stat_color,
-                    stat_shadow,
-                ));
-
-                // Скорость
-                stats.spawn((
-                    SelectionPanelUI,
-                    Text::new(format!("Скор: {:.0}", chase.speed)),
-                    stat_style.clone(),
-                    stat_color,
-                    stat_shadow,
-                ));
-
-                // Дальность атаки
-                stats.spawn((
-                    SelectionPanelUI,
-                    Text::new(format!("Рад: {:.1}м", chase.attack_range)),
-                    stat_style,
-                    stat_color,
-                    stat_shadow,
-                ));
-            });
         });
-    });
+
+        // HP текст
+        info.spawn((
+            SelectionPanelUI,
+            SelectionHpText,
+            Text::new(format!("{} / {}", hp_current as i32, hp_max as i32)),
+            TextFont { font: font_ui_bold, font_size: 14.0, ..default() },
+            TextColor(Color::srgb(0.85, 0.8, 0.7)),
+            TextShadow {
+                offset: Vec2::new(1.0, 1.0),
+                color: Color::srgba(0.0, 0.0, 0.0, 0.7),
+            },
+        ));
+
+        // Статы
+        info.spawn((
+            SelectionPanelUI,
+            Node {
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(16.0),
+                margin: UiRect::top(Val::Px(2.0)),
+                ..default()
+            },
+        )).with_children(|stats_row| {
+            let stat_style = TextFont { font: font_ui.clone(), font_size: 13.0, ..default() };
+            let stat_color = TextColor(Color::srgb(0.65, 0.6, 0.55));
+            let stat_shadow = TextShadow {
+                offset: Vec2::new(1.0, 1.0),
+                color: Color::srgba(0.0, 0.0, 0.0, 0.6),
+            };
+
+            for (_label, text) in stats {
+                stats_row.spawn((
+                    SelectionPanelUI,
+                    Text::new(text.clone()),
+                    stat_style.clone(),
+                    stat_color,
+                    stat_shadow,
+                ));
+            }
+        });
+    }).id();
+
+    commands.entity(root).add_child(info_column);
+}
+
+fn build_enemy_panel(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    portrait_path: &str,
+    enemy_type: &EnemyType,
+    health: &Health,
+    chase: &ChasePlayer,
+    attack_cd: &EnemyAttackCooldown,
+) {
+    let name = match enemy_type {
+        EnemyType::Upyr => "Упырь",
+        EnemyType::Leshiy => "Леший",
+        EnemyType::Volkolak => "Волколак",
+    };
+    let hp_color = match enemy_type {
+        EnemyType::Upyr => Color::srgb(0.8, 0.15, 0.1),
+        EnemyType::Leshiy => Color::srgb(0.15, 0.7, 0.2),
+        EnemyType::Volkolak => Color::srgb(0.5, 0.5, 0.65),
+    };
+    let stats = vec![
+        ("damage", format!("Урон: {:.0}", attack_cd.damage)),
+        ("speed", format!("Скор: {:.0}", chase.speed)),
+        ("range", format!("Рад: {:.1}м", chase.attack_range)),
+    ];
+
+    let root = spawn_panel_root(commands, asset_server, portrait_path);
+    spawn_info_column(commands, root, name, health.current, health.max, hp_color, &stats, asset_server);
+}
+
+fn build_player_panel(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    portrait_path: &str,
+    player_health: &PlayerHealth,
+    weapon: &Weapon,
+) {
+    let hp_color = Color::srgb(0.95, 0.7, 0.2);
+    let stats = vec![
+        ("damage", format!("Урон: {:.0}", weapon.damage)),
+        ("range", format!("Рад: {:.1}м", weapon.range)),
+        ("cooldown", format!("КД: {:.1}с", weapon.cooldown)),
+    ];
+
+    let root = spawn_panel_root(commands, asset_server, portrait_path);
+    spawn_info_column(
+        commands, root, "Богатырь",
+        player_health.current, player_health.max,
+        hp_color, &stats, asset_server,
+    );
 }
 
 /// Обновляет HP-бар и HP-текст в реальном времени.
 pub fn update_selection_panel(
     selection: Res<SelectionState>,
     enemies: Query<(&Health, &EnemyType), With<Enemy>>,
+    players: Query<&PlayerHealth, With<Player>>,
     mut hp_text: Query<&mut Text, With<SelectionHpText>>,
     mut hp_fill: Query<&mut Node, With<SelectionHpFill>>,
     mut hp_fill_color: Query<&mut BackgroundColor, With<SelectionHpFill>>,
 ) {
     let Some(selected) = selection.selected_entity else { return };
-    let Ok((health, enemy_type)) = enemies.get(selected) else { return };
 
-    let hp_fraction = (health.current / health.max).clamp(0.0, 1.0);
+    let (hp_current, hp_max, normal_color) =
+        if let Ok((health, enemy_type)) = enemies.get(selected) {
+            let color = match enemy_type {
+                EnemyType::Upyr => Color::srgb(0.8, 0.15, 0.1),
+                EnemyType::Leshiy => Color::srgb(0.15, 0.7, 0.2),
+                EnemyType::Volkolak => Color::srgb(0.5, 0.5, 0.65),
+            };
+            (health.current, health.max, color)
+        } else if let Ok(health) = players.get(selected) {
+            (health.current, health.max, Color::srgb(0.95, 0.7, 0.2))
+        } else {
+            return;
+        };
+
+    let hp_fraction = (hp_current / hp_max).clamp(0.0, 1.0);
 
     for mut text in &mut hp_text {
-        **text = format!("{} / {}", health.current as i32, health.max as i32);
+        **text = format!("{} / {}", hp_current as i32, hp_max as i32);
     }
     for mut node in &mut hp_fill {
         node.width = Val::Percent(hp_fraction * 100.0);
     }
 
-    // Мигание красным при низком HP (< 30%)
-    if hp_fraction < 0.3 {
-        let warning_color = Color::srgb(0.9, 0.15, 0.1);
-        for mut bg in &mut hp_fill_color {
-            bg.0 = warning_color;
-        }
+    let fill_color = if hp_fraction < 0.3 {
+        Color::srgb(0.9, 0.15, 0.1)
     } else {
-        let normal_color = match enemy_type {
-            EnemyType::Upyr => Color::srgb(0.8, 0.15, 0.1),
-            EnemyType::Leshiy => Color::srgb(0.15, 0.7, 0.2),
-            EnemyType::Volkolak => Color::srgb(0.5, 0.5, 0.65),
-        };
-        for mut bg in &mut hp_fill_color {
-            bg.0 = normal_color;
-        }
+        normal_color
+    };
+    for mut bg in &mut hp_fill_color {
+        bg.0 = fill_color;
     }
 }
 

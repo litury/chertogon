@@ -34,16 +34,3 @@ pub struct SelectionHpFill;
 #[derive(Component)]
 pub struct SelectionPortrait;
 
-// === Портретная система ===
-
-/// Маркер сущностей портретной сцены (модель + свет)
-#[derive(Component)]
-pub struct PortraitScene;
-
-/// Маркер камеры портрета
-#[derive(Component)]
-pub struct PortraitCamera;
-
-/// Render target портрета (создаётся при входе в Playing)
-#[derive(Resource)]
-pub struct PortraitRenderTarget(pub Handle<Image>);

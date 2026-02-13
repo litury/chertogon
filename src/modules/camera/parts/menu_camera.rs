@@ -1,10 +1,8 @@
 use bevy::prelude::*;
-use crate::modules::selection::components::PortraitCamera;
-
 /// Камера медленно вращается вокруг арены для атмосферного Title Screen
 pub fn menu_camera_orbit_system(
     time: Res<Time>,
-    mut camera: Query<&mut Transform, (With<Camera3d>, Without<PortraitCamera>)>,
+    mut camera: Query<&mut Transform, With<Camera3d>>,
 ) {
     let Ok(mut transform) = camera.single_mut() else { return };
 
