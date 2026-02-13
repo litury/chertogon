@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::asset::RenderAssetUsages;
-use avian3d::prelude::LinearVelocity;
-use crate::modules::enemies::components::{Enemy, Health, EnemyDying};
-use crate::modules::player::components::Player;
+use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel};
+use crate::modules::player::components::{Player, PlayerModel};
 use crate::modules::combat::components::PlayerHealth;
 
 /// Ground ring — HP-бар в виде дуги + индикатор направления.
 /// Дуга сжимается с потерей HP (разрыв сзади = куда бить).
-/// Поворачивается в направлении движения.
+/// Поворачивается синхронно с моделью персонажа.
 #[derive(Component)]
 pub struct GroundCircle {
     pub inner_radius: f32,
@@ -18,31 +17,32 @@ pub struct GroundCircle {
     pub material_handle: Handle<StandardMaterial>,
     /// Последняя доля HP для которой был построен меш (избегаем пересборки каждый кадр)
     pub last_hp_fraction: f32,
-    /// Угол направления (радианы, atan2 от velocity)
+    /// Угол направления (радианы, из rotation модели)
     pub last_facing: f32,
 }
 
 /// HP-дуга + направление: обновляет меш и вращение кольца
 pub fn health_ring_system(
     time: Res<Time>,
-    enemies: Query<(&Health, &LinearVelocity, &Children), (With<Enemy>, Without<EnemyDying>)>,
-    player: Query<(&PlayerHealth, &LinearVelocity, &Children), With<Player>>,
+    enemies: Query<(&Health, &Children), (With<Enemy>, Without<EnemyDying>)>,
+    player: Query<(&PlayerHealth, &Children), With<Player>>,
     mut circle_query: Query<(&mut GroundCircle, &mut Transform, &Mesh3d)>,
+    model_query: Query<&Transform, (Or<(With<PlayerModel>, With<EnemyModel>)>, Without<GroundCircle>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let t = time.elapsed_secs();
 
     // Враги
-    for (health, velocity, children) in &enemies {
+    for (health, children) in &enemies {
         let hp_pct = health.current / health.max;
-        update_ring(&mut circle_query, &mut meshes, &mut materials, children, hp_pct, velocity, t);
+        update_ring(&mut circle_query, &mut meshes, &mut materials, children, hp_pct, &model_query, t);
     }
 
     // Игрок
-    for (health, velocity, children) in &player {
+    for (health, children) in &player {
         let hp_pct = health.current / health.max;
-        update_ring(&mut circle_query, &mut meshes, &mut materials, children, hp_pct, velocity, t);
+        update_ring(&mut circle_query, &mut meshes, &mut materials, children, hp_pct, &model_query, t);
     }
 }
 
@@ -52,18 +52,27 @@ fn update_ring(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     children: &Children,
     hp_pct: f32,
-    velocity: &LinearVelocity,
+    model_query: &Query<&Transform, (Or<(With<PlayerModel>, With<EnemyModel>)>, Without<GroundCircle>)>,
     t: f32,
 ) {
+    // Направление из rotation модели-сиблинга (PlayerModel / EnemyModel)
+    let mut facing = None;
+    for child in children.iter() {
+        if let Ok(model_transform) = model_query.get(child) {
+            let forward = model_transform.rotation * Vec3::Z;
+            facing = Some(forward.x.atan2(forward.z));
+            break;
+        }
+    }
+
     for child in children.iter() {
         let Ok((mut circle, mut transform, mesh3d)) = circle_query.get_mut(child) else {
             continue;
         };
 
-        // Направление из velocity (обновляем только при движении)
-        let vel_xz = Vec2::new(velocity.0.x, velocity.0.z);
-        if vel_xz.length() > 0.1 {
-            circle.last_facing = velocity.0.x.atan2(velocity.0.z);
+        // Синхронизируем направление кольца с моделью
+        if let Some(angle) = facing {
+            circle.last_facing = angle;
         }
 
         // Обновляем меш только когда HP реально изменился

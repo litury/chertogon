@@ -2,10 +2,6 @@ use bevy::prelude::*;
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::VertexAttributeValues;
 use avian3d::prelude::*;
-use bevy_firework::core::*;
-use bevy_firework::curve::*;
-use bevy_firework::emission_shape::EmissionShape;
-use bevy_utilitarian::prelude::*;
 use crate::toolkit::asset_paths;
 use super::torch_flicker::TorchFlicker;
 
@@ -15,29 +11,45 @@ pub fn setup_scene(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Directional Light (холодное солнце, по дизайн-доку)
+    // === Directional Light (луна / холодный свет) ===
     commands.spawn((
         DirectionalLight {
-            color: Color::srgb(0.9, 0.9, 1.0),
+            color: Color::srgb(0.85, 0.85, 1.0),
             illuminance: 5000.0,
             shadows_enabled: true,
             ..default()
         },
+        bevy::light::CascadeShadowConfigBuilder {
+            num_cascades: 2,
+            maximum_distance: 35.0,
+            first_cascade_far_bound: 15.0,
+            ..default()
+        }.build(),
         Transform::from_xyz(10.0, 20.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // Global Ambient Light (Gothic атмосфера с достаточной читаемостью персонажей)
+    // === Fill Light (rim подсветка персонажей) ===
+    commands.spawn((
+        DirectionalLight {
+            color: Color::srgb(0.35, 0.35, 0.6),
+            illuminance: 400.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(-5.0, 15.0, -10.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    // === Global Ambient Light ===
     commands.insert_resource(GlobalAmbientLight {
-        color: Color::srgb(0.3, 0.3, 0.35),
-        brightness: 150.0,
+        color: Color::srgb(0.2, 0.18, 0.22),
+        brightness: 200.0,
         ..default()
     });
 
-    // Пол арены: один Plane3d 50x50м + seamless PBR текстура (Polyhaven stone_tiles)
-    let tile_repeat = 10.0; // текстура повторяется 10x10 раз (каждый тайл ~5x5м)
+    // Пол арены: Plane3d 50x50м + seamless PBR текстура
+    let tile_repeat = 10.0;
     let mut floor_mesh: Mesh = Plane3d::default().mesh().size(50.0, 50.0).into();
 
-    // Масштабируем UV для тайлинга
     if let Some(VertexAttributeValues::Float32x2(uvs)) = floor_mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0) {
         for uv in uvs.iter_mut() {
             uv[0] *= tile_repeat;
@@ -45,7 +57,6 @@ pub fn setup_scene(
         }
     }
 
-    // Загружаем PBR текстуры с режимом Repeat
     let sampler_repeat = |s: &mut ImageLoaderSettings| {
         s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
             address_mode_u: ImageAddressMode::Repeat,
@@ -62,8 +73,9 @@ pub fn setup_scene(
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color_texture: Some(floor_diff),
             normal_map_texture: Some(floor_normal),
-            metallic: 0.05,
-            perceptual_roughness: 0.85,
+            metallic: 0.0,
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
             ..default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
@@ -72,18 +84,14 @@ pub fn setup_scene(
         crate::shared::GameLayer::static_layers(),
     ));
 
-    // === СТЕНЫ АРЕНЫ: модульные GLB панели из Meshy ===
-    info!("🏗️ Creating arena walls...");
-
+    // === СТЕНЫ АРЕНЫ ===
     let wall_scene = asset_server.load(asset_paths::WALL_PANEL);
     let half = 25.0;
     let panel_size = 5.0;
-    let num_panels = 10; // 50м / 5м = 10 панелей на стену
+    let num_panels = 10;
     let wall_height = 5.0;
-    // GLB bbox: ~2.0×1.5×0.32 → масштаб до 5×5×1м
     let wall_scale = Vec3::new(2.5, 3.33, 3.0);
 
-    // Северная стена (Z+) — панели вдоль X
     for i in 0..num_panels {
         let x = -half + panel_size * 0.5 + i as f32 * panel_size;
         commands.spawn((
@@ -95,7 +103,6 @@ pub fn setup_scene(
         ));
     }
 
-    // Южная стена (Z-)
     for i in 0..num_panels {
         let x = -half + panel_size * 0.5 + i as f32 * panel_size;
         commands.spawn((
@@ -107,7 +114,6 @@ pub fn setup_scene(
         ));
     }
 
-    // Западная стена (X-) — панели вдоль Z, повёрнуты на 90°
     for i in 0..num_panels {
         let z = -half + panel_size * 0.5 + i as f32 * panel_size;
         commands.spawn((
@@ -121,7 +127,6 @@ pub fn setup_scene(
         ));
     }
 
-    // Восточная стена (X+)
     for i in 0..num_panels {
         let z = -half + panel_size * 0.5 + i as f32 * panel_size;
         commands.spawn((
@@ -135,10 +140,9 @@ pub fn setup_scene(
         ));
     }
 
-    // === ФАКЕЛЫ: 3D модель + частицы огня + PointLight ===
+    // === ФАКЕЛЫ: 3D модель + PointLight + мерцание ===
     let torch_scene = asset_server.load(asset_paths::TORCH);
 
-    // (позиция на стене, поворот модели лицом внутрь)
     let torches: [(Vec3, f32); 4] = [
         (Vec3::new(-23.0, 3.0, -half), 0.0),
         (Vec3::new(23.0, 3.0, -half), 0.0),
@@ -147,12 +151,10 @@ pub fn setup_scene(
     ];
 
     for (i, (pos, angle)) in torches.iter().enumerate() {
-        // Parent: позиция на стене
         let torch_parent = commands.spawn(
             Transform::from_translation(*pos),
         ).id();
 
-        // Child 1: 3D модель факела (палка/кронштейн, без огня)
         let model = commands.spawn((
             SceneRoot(torch_scene.clone()),
             Transform::from_xyz(0.0, -0.5, 0.0)
@@ -160,56 +162,16 @@ pub fn setup_scene(
                 .with_rotation(Quat::from_rotation_y(*angle)),
         )).id();
 
-        // Child 2: частицы огня + PointLight + мерцание (наверху факела)
         let fire = commands.spawn((
-            ParticleSpawner {
-                particle_settings: vec![ParticleSettings {
-                    lifetime: RandF32 { min: 0.3, max: 0.8 },
-                    initial_scale: RandF32 { min: 0.03, max: 0.1 },
-                    scale_curve: FireworkCurve::uneven_samples(vec![
-                        (0.0, 0.8), (0.2, 1.2), (1.0, 0.0),
-                    ]),
-                    acceleration: Vec3::new(0., 2.0, 0.),
-                    linear_drag: 1.5,
-                    base_color: FireworkGradient::uneven_samples(vec![
-                        (0.0, LinearRgba::new(50., 40., 5., 1.0)),
-                        (0.3, LinearRgba::new(10., 5., 0.5, 0.9)),
-                        (0.6, LinearRgba::new(3., 0.8, 0.1, 0.7)),
-                        (0.8, LinearRgba::new(1., 0.2, 0.05, 0.4)),
-                        (1.0, LinearRgba::new(0.2, 0.1, 0.1, 0.0)),
-                    ]),
-                    emissive_color: FireworkGradient::uneven_samples(vec![
-                        (0.0, LinearRgba::new(30., 20., 2., 1.0)),
-                        (0.5, LinearRgba::new(5., 1., 0.1, 1.0)),
-                        (1.0, LinearRgba::BLACK),
-                    ]),
-                    blend_mode: BlendMode::Add,
-                    fade_edge: 0.8,
-                    pbr: false,
-                    ..default()
-                }],
-                emission_settings: vec![EmissionSettings {
-                    emission_pacing: EmissionPacing::rate(300.),
-                    emission_shape: EmissionShape::Sphere(0.12),
-                    initial_velocity: RandVec3 {
-                        magnitude: RandF32 { min: 0.2, max: 1.0 },
-                        direction: Vec3::Y,
-                        spread: 45_f32.to_radians(),
-                    },
-                    initial_velocity_radial: RandF32 { min: 0.1, max: 0.5 },
-                    ..default()
-                }],
-                ..default()
-            },
             PointLight {
                 color: Color::srgb(1.0, 0.6, 0.2),
-                intensity: 200_000.0,
-                range: 15.0,
+                intensity: 250_000.0,
+                range: 18.0,
                 shadows_enabled: false,
                 ..default()
             },
             TorchFlicker {
-                base_intensity: 200_000.0,
+                base_intensity: 250_000.0,
                 flicker_amount: 40_000.0,
                 speed: 4.0,
                 phase: i as f32 * 1.5,
@@ -220,5 +182,5 @@ pub fn setup_scene(
         commands.entity(torch_parent).add_children(&[model, fire]);
     }
 
-    info!("✅ Arena setup complete: 50x50m with walls, torches, Gothic lighting");
+    info!("Arena setup complete: 50x50m with walls, torches, lighting");
 }
