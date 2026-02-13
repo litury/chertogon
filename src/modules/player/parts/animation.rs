@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use std::time::Duration;
 use crate::modules::{Player, AnimatedCharacter, InputState};
-use crate::modules::player::components::{AnimationState, PlayerAnimations, PlayerHitStagger, PlayerModel};
+use crate::modules::player::components::{AnimationState, PlayerAnimations, PlayerHitStagger, PlayerModel, StaggerCooldown};
 use crate::modules::player::AnimationSetupComplete;
 use crate::modules::combat::components::AttackCooldown;
 
@@ -88,7 +88,7 @@ pub fn player_hit_stagger_system(
         // Emissive glow — выставляем ОДИН РАЗ при первом тике
         if !stagger.emissive_applied {
             stagger.emissive_applied = true;
-            let glow = LinearRgba::new(3.0, 3.0, 3.0, 1.0);
+            let glow = LinearRgba::new(6.0, 1.5, 0.5, 1.0);
             for child in children.iter() {
                 if model_query.get(child).is_ok() {
                     for descendant in children_query.iter_descendants(child) {
@@ -104,7 +104,11 @@ pub fn player_hit_stagger_system(
 
         if stagger.timer.is_finished() {
             character.current_animation = AnimationState::Idle;
-            commands.entity(entity).remove::<PlayerHitStagger>();
+            commands.entity(entity)
+                .remove::<PlayerHitStagger>()
+                .insert(StaggerCooldown {
+                    timer: Timer::from_seconds(0.5, TimerMode::Once),
+                });
 
             // Запустить idle анимацию — чистое состояние для blend в attack
             if let Ok((animations, mut anim_player, mut transitions)) = animation_query.single_mut() {
@@ -129,6 +133,20 @@ pub fn player_hit_stagger_system(
                     }
                 }
             }
+        }
+    }
+}
+
+/// Тикает таймер иммунитета к стаггеру, убирает по завершении
+pub fn stagger_cooldown_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut StaggerCooldown), With<Player>>,
+) {
+    for (entity, mut cd) in &mut query {
+        cd.timer.tick(time.delta());
+        if cd.timer.is_finished() {
+            commands.entity(entity).remove::<StaggerCooldown>();
         }
     }
 }

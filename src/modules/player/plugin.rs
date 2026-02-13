@@ -18,6 +18,7 @@ impl Plugin for PlayerPlugin {
                 movement::player_movement_system,
                 animation::animation_state_system,
                 animation::player_hit_stagger_system,
+                animation::stagger_cooldown_system,
             ).run_if(in_state(GameState::Playing)));
     }
 }

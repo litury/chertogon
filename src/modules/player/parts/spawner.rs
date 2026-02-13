@@ -117,6 +117,7 @@ pub fn spawn_player(
             material_handle: ring_material,
             last_hp_fraction: -1.0, // Невозможное значение → обновится в первом кадре
             last_facing: 0.0,
+            last_alpha: 0.0,
         },
     )).id();
 

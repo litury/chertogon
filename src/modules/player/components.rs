@@ -53,6 +53,14 @@ pub struct PlayerHitStagger {
     pub emissive_applied: bool,
 }
 
+/// Окно иммунитета к повторному стаггеру (0.5с после выхода из HitReaction)
+/// Урон проходит, но новый стаггер не срабатывает — даёт окно для атаки
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct StaggerCooldown {
+    pub timer: Timer,
+}
+
 /// Маркер для entity оружия (child кости RightHand)
 #[derive(Component, Reflect)]
 #[reflect(Component)]
