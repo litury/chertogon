@@ -5,5 +5,6 @@
 
 pub(super) mod setup_scene;
 pub(super) mod torch_flicker;
+pub(super) mod portal_setup;
 pub mod stylized_material;
 pub mod ground_circle;

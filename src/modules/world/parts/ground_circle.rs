@@ -3,7 +3,7 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::asset::RenderAssetUsages;
 use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel};
 use crate::modules::player::components::{Player, PlayerModel};
-use crate::modules::combat::components::PlayerHealth;
+use crate::modules::combat::components::{PlayerHealth, AttackCooldown};
 
 /// Ground ring — HP-бар в виде дуги + индикатор направления.
 /// Дуга сжимается с потерей HP (разрыв сзади = куда бить).
@@ -21,6 +21,18 @@ pub struct GroundCircle {
     pub last_facing: f32,
     /// Последнее значение alpha (избегаем get_mut каждый кадр)
     pub last_alpha: f32,
+}
+
+/// Кольцо перезарядки оружия (тонкая дуга внутри HP ring)
+#[derive(Component)]
+pub struct CooldownRing {
+    pub inner_radius: f32,
+    pub outer_radius: f32,
+    pub material_handle: Handle<StandardMaterial>,
+    /// Последняя доля кулдауна (0..1)
+    pub last_fraction: f32,
+    /// Направление (синхронизируется с PlayerModel)
+    pub last_facing: f32,
 }
 
 /// HP-дуга + направление: обновляет меш и вращение кольца
@@ -100,6 +112,64 @@ fn update_ring(
             if let Some(mat) = materials.get_mut(&circle.material_handle) {
                 mat.base_color = mat.base_color.with_alpha(new_alpha);
             }
+        }
+    }
+}
+
+/// Обновляет кольцо перезарядки оружия игрока
+pub fn cooldown_ring_system(
+    player: Query<(&AttackCooldown, &Children), With<Player>>,
+    mut ring_query: Query<(&mut CooldownRing, &mut Transform, &Mesh3d), Without<GroundCircle>>,
+    model_query: Query<&Transform, (With<PlayerModel>, Without<CooldownRing>, Without<GroundCircle>)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    time: Res<Time>,
+) {
+    let Ok((cooldown, children)) = player.single() else { return };
+
+    // Направление из PlayerModel
+    let mut facing = 0.0_f32;
+    for child in children.iter() {
+        if let Ok(model_tf) = model_query.get(child) {
+            let forward = model_tf.rotation * Vec3::Z;
+            facing = forward.x.atan2(forward.z);
+            break;
+        }
+    }
+
+    let cd_fraction = cooldown.timer.fraction();
+
+    for child in children.iter() {
+        let Ok((mut ring, mut transform, mesh3d)) = ring_query.get_mut(child) else {
+            continue;
+        };
+
+        ring.last_facing = facing;
+
+        // Обновляем меш при заметном изменении fraction
+        if (ring.last_fraction - cd_fraction).abs() > 0.01 {
+            ring.last_fraction = cd_fraction;
+            // Полное кольцо = 95% окружности (как HP ring, gap сзади)
+            let arc_fraction = cd_fraction * 0.90 + 0.05;
+            if let Some(mesh) = meshes.get_mut(&mesh3d.0) {
+                *mesh = create_annular_arc(ring.inner_radius, ring.outer_radius, arc_fraction, 24);
+            }
+        }
+
+        // Вращение синхронно с HP ring
+        transform.rotation = Quat::from_rotation_y(ring.last_facing)
+            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+
+        // Яркость: ярче когда готов, тусклее на кулдауне
+        let t = time.elapsed_secs();
+        let ready = cooldown.timer.is_finished();
+        let alpha = if ready {
+            0.7 + 0.15 * (t * 4.0).sin() // Пульс когда готов
+        } else {
+            0.35 + cd_fraction * 0.25 // Растёт с прогрессом кулдауна
+        };
+        if let Some(mat) = materials.get_mut(&ring.material_handle) {
+            mat.base_color = mat.base_color.with_alpha(alpha);
         }
     }
 }
