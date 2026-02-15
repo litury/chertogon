@@ -23,19 +23,19 @@ pub fn handle_keyboard_input(
         movement.x += 1.0;
     }
 
-    // Нормализация вектора движения
+    // Клавиатура пишет movement ТОЛЬКО если есть нажатые клавиши
+    // или touch не активен (чтобы не перезаписать touch drag нулём)
     if movement.length() > 0.0 {
-        movement = movement.normalize();
+        input_state.movement = movement.normalize();
+        input_state.is_running = keyboard.pressed(KeyCode::ShiftLeft)
+            || keyboard.pressed(KeyCode::ShiftRight);
+    } else if !input_state.is_touch_active {
+        input_state.movement = Vec3::ZERO;
+        input_state.is_running = false;
     }
 
-    input_state.movement = movement;
-    input_state.is_running = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
-
-    // Mouse wheel для зума камеры
-    // Положительное значение = scroll up = zoom in (приближение)
-    // Отрицательное значение = scroll down = zoom out (отдаление)
-    input_state.zoom_delta = 0.0;
+    // Mouse wheel для зума камеры (zoom_delta сбрасывается в camera_zoom_system)
     for event in mouse_wheel.read() {
-        input_state.zoom_delta += event.y;  // y = вертикальный scroll
+        input_state.zoom_delta += event.y;
     }
 }
