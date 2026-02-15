@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use std::time::Duration;
 use avian3d::prelude::*;  // ✅ Добавляем импорт физики (RigidBody, Collider)
-use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerModel, AnimationSetupComplete, PlayerStats};
+use crate::modules::player::components::{Player, PlayerAnimState, PlayerAnimations, PlayerModel, AnimationSetupComplete, PlayerStats};
 use crate::modules::combat::components::{Weapon, AttackCooldown, PlayerHealth};
 use crate::modules::world::{GroundCircle, CooldownRing};
 use crate::toolkit::asset_paths;
 
-/// Временный компонент для передачи индексов анимаций от spawn к setup
-/// Удаляется после настройки AnimationPlayer
+/// Индексы анимаций в AnimationGraph — хранится на PlayerModel перманентно.
+/// setup_scene_animation перезапускается если Bevy пересоздаст сцену из SceneRoot.
 #[derive(Component, Clone, Copy)]
 pub struct AnimationIndices {
     idle: AnimationNodeIndex,
@@ -60,9 +60,7 @@ pub fn spawn_player(
     let player_entity = commands.spawn((
         Transform::from_xyz(0.0, 0.9, 0.0),  // ✅ Y = 0.9 (половина высоты 1.8м) - стоит на полу
         Player,
-        AnimatedCharacter {
-            current_animation: AnimationState::Idle,
-        },
+        PlayerAnimState::new(),
         RigidBody::Dynamic,  // ✅ Dynamic = сталкивается со Static и другими Dynamic
         Collider::cylinder(0.5, 1.8),  // ✅ Цилиндр: радиус 0.5м, высота 1.8м (человек)
         LinearVelocity::default(),  // ✅ Для плавного движения через физику
@@ -168,74 +166,33 @@ pub fn spawn_player(
     info!("✅ Created Player entity with PlayerModel child + ground circle + cooldown ring + light");
 }
 
-/// Система настройки AnimationPlayer после загрузки GLB
-/// Выполняется КАЖДЫЙ КАДР пока AnimationPlayer не будет найден и настроен
+/// Настройка AnimationPlayer после загрузки GLB.
+/// Бежит каждый кадр, ищет AnimationPlayer без AnimationSetupComplete.
+/// AnimationIndices остаётся на PlayerModel — если Bevy пересоздаст сцену,
+/// setup автоматически повторится для нового AnimationPlayer entity.
 pub fn setup_scene_animation(
     player: Query<&Children, With<Player>>,
     model_query: Query<(&Children, &AnimationIndices, &AnimationGraphHandle), With<PlayerModel>>,
-    mut animation_players: Query<
-        (Entity, &mut AnimationPlayer),
-        (Without<AnimationSetupComplete>, Without<PlayerModel>)
+    animation_players: Query<
+        Entity,
+        (With<AnimationPlayer>, Without<AnimationSetupComplete>, Without<PlayerModel>)
     >,
     children: Query<&Children>,
     mut commands: Commands,
 ) {
-    // Обходим Player -> PlayerModel -> AnimationPlayer
     for player_children in &player {
         for &model_child in player_children {
             if let Ok((model_children, anim_indices, graph_handle)) = model_query.get(model_child) {
-
-                // Helper для настройки entity
-                let setup_entity = |entity: Entity,
-                                   player: &mut AnimationPlayer,
-                                   commands: &mut Commands| {
-                    info!("✅ Found AnimationPlayer in GLB hierarchy!");
-
-                    // Конвертируем временные индексы в PlayerAnimations
-                    let animations = PlayerAnimations {
-                        idle: anim_indices.idle,
-                        walk: anim_indices.walk,
-                        run: anim_indices.run,
-                        attack: anim_indices.attack,
-                        hit: anim_indices.hit,
-                    };
-
-                    // Добавляем компоненты ТОЛЬКО к AnimationPlayer entity
-                    commands.entity(entity).insert(animations);
-                    commands.entity(entity).insert(graph_handle.clone());
-
-                    // Создаем transitions и запускаем Idle
-                    let mut transitions = AnimationTransitions::new();
-                    transitions
-                        .play(player, animations.idle, Duration::ZERO)
-                        .repeat();
-
-                    commands.entity(entity).insert(transitions);
-
-                    // Маркер завершения (предотвращает повторное выполнение)
-                    commands.entity(entity).insert(AnimationSetupComplete);
-
-                    // Показываем модель (была Hidden до загрузки GLB)
-                    commands.entity(model_child).insert(Visibility::Inherited);
-
-                    // Удаляем временный компонент
-                    commands.entity(model_child).remove::<AnimationIndices>();
-
-                    info!("🎬 Animation system initialized successfully!");
-                };
-
-                // Ищем в direct children
+                // Ищем AnimationPlayer на глубине 1-2 от PlayerModel
                 for &child in model_children {
-                    if let Ok((entity, mut player)) = animation_players.get_mut(child) {
-                        setup_entity(entity, &mut player, &mut commands);
+                    if let Ok(entity) = animation_players.get(child) {
+                        setup_anim_components(entity, anim_indices, graph_handle, model_child, &mut commands);
                         return;
                     }
-
-                    // Ищем в grandchildren
                     if let Ok(grandchildren) = children.get(child) {
                         for &grandchild in grandchildren {
-                            if let Ok((entity, mut player)) = animation_players.get_mut(grandchild) {
-                                setup_entity(entity, &mut player, &mut commands);
+                            if let Ok(entity) = animation_players.get(grandchild) {
+                                setup_anim_components(entity, anim_indices, graph_handle, model_child, &mut commands);
                                 return;
                             }
                         }
@@ -243,5 +200,49 @@ pub fn setup_scene_animation(
                 }
             }
         }
+    }
+}
+
+/// Вставляет компоненты анимации на AnimationPlayer entity через deferred commands.
+/// НЕ вызывает transitions.play() — это делает play_initial_animation на следующем кадре,
+/// когда AnimationGraphHandle уже на entity.
+fn setup_anim_components(
+    entity: Entity,
+    anim_indices: &AnimationIndices,
+    graph_handle: &AnimationGraphHandle,
+    model_child: Entity,
+    commands: &mut Commands,
+) {
+    let animations = PlayerAnimations {
+        idle: anim_indices.idle,
+        walk: anim_indices.walk,
+        run: anim_indices.run,
+        attack: anim_indices.attack,
+        hit: anim_indices.hit,
+    };
+
+    commands.entity(entity).insert((
+        animations,
+        graph_handle.clone(),
+        AnimationTransitions::new(),
+        AnimationSetupComplete,
+    ));
+
+    commands.entity(model_child).insert(Visibility::Inherited);
+
+    info!("🎬 Animation setup queued on {:?}", entity);
+}
+
+/// Запускает idle анимацию на кадре ПОСЛЕ setup — когда AnimationGraphHandle
+/// и AnimationTransitions уже на entity (deferred commands применены).
+pub fn play_initial_animation(
+    mut query: Query<
+        (&PlayerAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
+        Added<AnimationSetupComplete>,
+    >,
+) {
+    for (animations, mut player, mut transitions) in &mut query {
+        transitions.play(&mut player, animations.idle, Duration::ZERO).repeat();
+        info!("🎬 Player idle animation started");
     }
 }

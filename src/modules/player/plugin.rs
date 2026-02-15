@@ -14,11 +14,13 @@ impl Plugin for PlayerPlugin {
             ).chain())
             .add_systems(Update, (
                 spawner::setup_scene_animation,
+                spawner::play_initial_animation,
                 weapon_attachment::attach_weapon_to_hand,
                 movement::player_movement_system,
                 animation::animation_state_system,
                 animation::player_hit_stagger_system,
                 animation::stagger_cooldown_system,
+                animation::player_animation_transition_system, // Последняя — реагирует на все изменения state
             ).run_if(in_state(GameState::Playing)));
     }
 }

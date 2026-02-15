@@ -11,7 +11,7 @@ pub mod progression;
 // Реэкспорт публичных API
 pub use world::WorldPlugin;
 pub use input::{InputPlugin, InputState};
-pub use player::{PlayerPlugin, Player, AnimatedCharacter, AnimationState, PlayerModel, AnimationSetupComplete};
+pub use player::{PlayerPlugin, Player, PlayerAnimState, AnimationState, PlayerModel, AnimationSetupComplete};
 pub use camera::{CameraPlugin, CameraTarget};
 pub use enemies::{EnemiesPlugin, Enemy, Health, EnemyType};
 pub use combat::{CombatPlugin, PlayerHealth};

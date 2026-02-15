@@ -68,7 +68,7 @@ pub fn configure_app(app: &mut App) {
         app.add_plugins((RemotePlugin::default(), RemoteHttpPlugin::default()));
 
         app.register_type::<Player>()
-           .register_type::<AnimatedCharacter>()
+           .register_type::<PlayerAnimState>()
            .register_type::<AnimationState>()
            .register_type::<PlayerModel>()
            .register_type::<AnimationSetupComplete>()

@@ -1,7 +1,6 @@
 use bevy::prelude::*;
-use std::time::Duration;
 use avian3d::prelude::*;
-use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerModel, PlayerAnimations, AnimationSetupComplete};
+use crate::modules::player::components::{Player, PlayerAnimState, AnimationState, PlayerModel};
 use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel, EnemyAnimState, EnemyAnim};
 use crate::modules::combat::components::{Weapon, AttackCooldown, AttackAnimTimer, PendingAttack, MISS_RANGE_MULTIPLIER};
 use super::camera_shake::CameraShake;
@@ -18,22 +17,18 @@ use super::impact_flash;
 pub fn player_auto_attack_system(
     time: Res<Time>,
     mut player_query: Query<
-        (Entity, &Weapon, &mut AttackCooldown, &Children, &Transform, &mut AnimatedCharacter),
+        (Entity, &Weapon, &mut AttackCooldown, &Children, &Transform, &mut PlayerAnimState),
         (With<Player>, Without<PendingAttack>)
     >,
     enemies: Query<(Entity, &Transform, &Health), (With<Enemy>, Without<EnemyDying>)>,
     mut model_query: Query<&mut Transform, (With<PlayerModel>, Without<Player>, Without<Enemy>)>,
-    mut animation_query: Query<
-        (&PlayerAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
-        With<AnimationSetupComplete>
-    >,
     mut commands: Commands,
 ) {
-    let Ok((player_entity, weapon, mut cooldown, children, player_transform, mut character)) =
+    let Ok((player_entity, weapon, mut cooldown, children, player_transform, mut state)) =
         player_query.single_mut() else { return };
 
     // Во время стаггера нельзя атаковать (ARPG стандарт: action lock)
-    if character.current_animation == AnimationState::HitReaction {
+    if state.current == AnimationState::HitReaction {
         return;
     }
 
@@ -49,7 +44,7 @@ pub fn player_auto_attack_system(
     // Ищем ближайшего ЖИВОГО врага в радиусе
     let mut closest: Option<(Entity, f32, Vec3)> = None;
     for (entity, enemy_transform, health) in &enemies {
-        if health.is_dead() { continue; } // Пропускаем уже мёртвых
+        if health.is_dead() { continue; }
         let enemy_pos = enemy_transform.translation;
         let distance = (enemy_pos - player_pos).length();
         if distance <= weapon.range {
@@ -75,16 +70,10 @@ pub fn player_auto_attack_system(
         }
     }
 
-    // Анимация атаки — замах начинается (2.5× скорость: impact 1.05s → 0.42s)
-    character.current_animation = AnimationState::Attacking;
-    if let Ok((animations, mut anim_player, mut transitions)) = animation_query.single_mut() {
-        transitions.play(&mut anim_player, animations.attack, Duration::from_millis(200));
-        if let Some(active_anim) = anim_player.animation_mut(animations.attack) {
-            active_anim.set_speed(2.5);
-        }
-    }
+    // Только ставим состояние — центральная система применит анимацию со скоростью 2.5×
+    state.current = AnimationState::Attacking;
 
-    // Откладываем урон до момента удара (0.25с в анимацию)
+    // Откладываем урон до момента удара (0.42с в анимацию при 2.5× скорости)
     commands.entity(player_entity).insert(PendingAttack {
         target: target_entity,
         damage: weapon.damage,
@@ -210,24 +199,18 @@ pub fn apply_pending_attack_system(
     }
 }
 
-/// Сброс анимации атаки обратно в idle после проигрывания
+/// Сброс состояния атаки обратно в idle после проигрывания.
+/// Центральная система автоматически запустит idle анимацию и сбросит скорость.
 pub fn attack_animation_reset_system(
     time: Res<Time>,
-    mut query: Query<(Entity, &mut AttackAnimTimer, &mut AnimatedCharacter), With<Player>>,
-    mut animation_query: Query<(&PlayerAnimations, &mut AnimationPlayer), With<AnimationSetupComplete>>,
+    mut query: Query<(Entity, &mut AttackAnimTimer, &mut PlayerAnimState), With<Player>>,
     mut commands: Commands,
 ) {
-    for (entity, mut anim_timer, mut character) in &mut query {
+    for (entity, mut anim_timer, mut state) in &mut query {
         anim_timer.timer.tick(time.delta());
         if anim_timer.timer.is_finished() {
-            if character.current_animation == AnimationState::Attacking {
-                character.current_animation = AnimationState::Idle;
-                // Сбрасываем скорость анимации с 2.5× обратно на 1.0
-                if let Ok((animations, mut anim_player)) = animation_query.single_mut() {
-                    if let Some(active_anim) = anim_player.animation_mut(animations.attack) {
-                        active_anim.set_speed(1.0);
-                    }
-                }
+            if state.current == AnimationState::Attacking {
+                state.current = AnimationState::Idle;
             }
             commands.entity(entity).remove::<AttackAnimTimer>();
         }

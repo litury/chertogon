@@ -5,15 +5,39 @@ use bevy::prelude::*;
 #[reflect(Component)]
 pub struct Player;
 
-/// Компонент анимированного персонажа
+/// Состояние анимации игрока (аналог EnemyAnimState).
+/// Системы только меняют `current`, центральная система обрабатывает переходы.
 #[derive(Component, Reflect)]
 #[reflect(Component)]
-pub struct AnimatedCharacter {
-    pub current_animation: AnimationState,
+pub struct PlayerAnimState {
+    pub current: AnimationState,
+    /// Последняя применённая анимация — защита от self-transitions (Bevy #13910)
+    #[reflect(ignore)]
+    previous: AnimationState,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect)]
+impl PlayerAnimState {
+    pub fn new() -> Self {
+        Self {
+            current: AnimationState::Idle,
+            previous: AnimationState::Idle,
+        }
+    }
+
+    /// Есть ли новый переход для применения
+    pub fn needs_transition(&self) -> bool {
+        self.current != self.previous
+    }
+
+    /// Отметить текущий переход как применённый
+    pub fn mark_applied(&mut self) {
+        self.previous = self.current;
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Reflect)]
 pub enum AnimationState {
+    #[default]
     Idle,
     Walking,
     Running,
@@ -81,8 +105,3 @@ impl Default for PlayerStats {
 #[reflect(Component)]
 pub struct WeaponModel;
 
-/// Маркер завершения крепления оружия к кости
-/// Добавляется к PlayerModel после успешного attachment
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct WeaponAttachmentComplete;

@@ -1,8 +1,6 @@
 use bevy::prelude::*;
-use std::time::Duration;
 use avian3d::prelude::*;
-use crate::modules::player::components::{Player, AnimatedCharacter, AnimationState, PlayerAnimations, PlayerHitStagger, PlayerModel, StaggerCooldown};
-use crate::modules::player::AnimationSetupComplete;
+use crate::modules::player::components::{Player, PlayerAnimState, AnimationState, PlayerHitStagger, PlayerModel, StaggerCooldown};
 use crate::modules::enemies::components::{Enemy, EnemyAnimState, EnemyAnim, EnemyDying};
 use crate::modules::combat::components::{PlayerHealth, EnemyAttackCooldown, PendingAttack, AttackAnimTimer};
 use super::damage_vignette::DamageVignette;
@@ -18,20 +16,16 @@ pub fn enemy_contact_damage_system(
     time: Res<Time>,
     mut commands: Commands,
     mut enemies: Query<(&Transform, &EnemyAnimState, &mut EnemyAttackCooldown), (With<Enemy>, Without<EnemyDying>)>,
-    mut player: Query<(Entity, &Transform, &mut PlayerHealth, &mut AnimatedCharacter, &mut LinearVelocity, &Children, Has<StaggerCooldown>), With<Player>>,
-    mut animation_query: Query<
-        (&PlayerAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
-        With<AnimationSetupComplete>
-    >,
+    mut player: Query<(Entity, &Transform, &mut PlayerHealth, &mut PlayerAnimState, &mut LinearVelocity, &Children, Has<StaggerCooldown>), With<Player>>,
     player_model_query: Query<Entity, With<PlayerModel>>,
     mut vignette: ResMut<DamageVignette>,
     mut camera_shake: ResMut<CameraShake>,
     vfx_assets: Res<HitVfxAssets>,
     asset_server: Res<AssetServer>,
 ) {
-    let Ok((player_entity, player_tf, mut player_health, mut character, mut velocity, children, has_stagger_cooldown)) = player.single_mut() else { return };
+    let Ok((player_entity, player_tf, mut player_health, mut state, mut velocity, children, has_stagger_cooldown)) = player.single_mut() else { return };
     let player_pos = player_tf.translation;
-    let already_staggered = character.current_animation == AnimationState::HitReaction;
+    let already_staggered = state.current == AnimationState::HitReaction;
 
     for (enemy_tf, anim_state, mut attack_cd) in &mut enemies {
         if anim_state.current == EnemyAnim::Attacking {
@@ -74,7 +68,8 @@ pub fn enemy_contact_damage_system(
 
                 // Стаггер только если НЕ в стаггере и НЕ в окне иммунитета (Diablo 2 Hit Recovery)
                 if !already_staggered && !has_stagger_cooldown {
-                    character.current_animation = AnimationState::HitReaction;
+                    // Только ставим состояние — центральная система применит hit анимацию
+                    state.current = AnimationState::HitReaction;
                     // Diablo 4: удар прерывает текущую атаку — чистый рестарт после стаггера
                     commands.entity(player_entity)
                         .remove::<PendingAttack>()
@@ -87,11 +82,6 @@ pub fn enemy_contact_damage_system(
                     // Knockback
                     let knockback_dir = Vec3::new(hit_dir.x, 0.0, hit_dir.z).normalize_or_zero();
                     velocity.0 = knockback_dir * 8.0;
-
-                    // Проиграть hit анимацию
-                    if let Ok((animations, mut anim_player, mut transitions)) = animation_query.single_mut() {
-                        transitions.play(&mut anim_player, animations.hit, Duration::from_millis(100));
-                    }
                 }
 
                 attack_cd.timer.reset();
