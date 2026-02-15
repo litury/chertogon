@@ -39,7 +39,6 @@ impl Plugin for EnemiesPlugin {
                 animation::setup_enemy_animation,
                 animation::spawn_scream_decay_system,
                 portal_spawn::portal_spawn_anim_system,
-                portal_vfx::portal_pulse_system,
                 portal_vfx::portal_particle_emitter_system,
                 portal_vfx::portal_smoke_system,
                 portal_vfx::portal_spark_system,

@@ -63,26 +63,26 @@ fn setup_anim_player(
     commands.entity(entity).insert(animations);
     commands.entity(entity).insert(graph_handle.clone());
 
+    // Запускаем начальную анимацию сразу (player.start() — немедленная мутация)
     let (anim_index, should_loop) = match current_anim {
-        EnemyAnim::Idle => (animations.idle, true),
-        EnemyAnim::Walking => (animations.walk, true),
-        EnemyAnim::Running => (animations.run, true),
-        EnemyAnim::Attacking => (animations.attack, false),
-        EnemyAnim::HitReaction => (animations.hit, false),
-        EnemyAnim::Screaming => (animations.scream, false),
-        EnemyAnim::Dying => (animations.death, false),
+        EnemyAnim::Idle => (anim_indices.idle, true),
+        EnemyAnim::Walking => (anim_indices.walk, true),
+        EnemyAnim::Running => (anim_indices.run, true),
+        EnemyAnim::Attacking => (anim_indices.attack, false),
+        EnemyAnim::HitReaction => (anim_indices.hit, false),
+        EnemyAnim::Screaming => (anim_indices.scream, false),
+        EnemyAnim::Dying => (anim_indices.death, false),
     };
     let mut transitions = AnimationTransitions::new();
     let transition = transitions.play(player, anim_index, Duration::ZERO);
     if should_loop {
         transition.repeat();
     }
-
     commands.entity(entity).insert(transitions);
     commands.entity(entity).insert(EnemyAnimationSetupComplete);
     commands.entity(model_child).remove::<EnemyAnimationIndices>();
 
-    debug!("🎬 Enemy animation initialized (state: {:?})", current_anim);
+    debug!("🎬 Enemy animation setup done (state: {:?})", current_anim);
 }
 
 /// Переключение анимации врага на основе состояния

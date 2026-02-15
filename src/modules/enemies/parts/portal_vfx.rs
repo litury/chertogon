@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::modules::enemies::components::{SpawnPortal, PortalVortex, PortalLight, WavePhase, WaveState};
+use crate::modules::enemies::components::{SpawnPortal, WavePhase, WaveState};
 use crate::shared::rand_01;
 
 /// Кэшированные ассеты для частиц порталов
@@ -66,59 +66,6 @@ pub fn init_portal_vfx_assets(
         spark_material_0,
         spark_material_1,
     });
-}
-
-// ─── Пульсация порталов ────────────────────────────────────────────
-
-/// Пульсация масштаба и яркости порталов в зависимости от фазы волны
-pub fn portal_pulse_system(
-    time: Res<Time>,
-    wave: Res<WaveState>,
-    portals: Query<&Children, With<SpawnPortal>>,
-    mut vortex_q: Query<&mut Transform, With<PortalVortex>>,
-    mut light_q: Query<&mut PointLight, With<PortalLight>>,
-) {
-    let t = time.elapsed_secs();
-
-    // Интенсивность пульсации по фазе
-    let pulse_intensity = match wave.phase {
-        WavePhase::Cooldown => {
-            let remaining = wave.wave_cooldown.remaining_secs();
-            if remaining < 1.0 {
-                1.0 - remaining // Нарастание за последнюю секунду
-            } else {
-                0.0
-            }
-        }
-        WavePhase::Spawning => 1.0,
-        WavePhase::Fighting => 0.3 + 0.1 * (t * 2.0).sin(),
-    };
-
-    let base_scale = portal_scale_for_wave(wave.current_wave);
-
-    for children in &portals {
-        for child in children.iter() {
-            if let Ok(mut transform) = vortex_q.get_mut(child) {
-                let pulse = 1.0 + pulse_intensity * 0.15 * (t * 4.0).sin();
-                transform.scale = Vec3::splat(base_scale * pulse);
-            }
-
-            if let Ok(mut light) = light_q.get_mut(child) {
-                let base = 150_000.0;
-                let boost = pulse_intensity * 100_000.0 * (t * 3.0).sin().abs();
-                light.intensity = base + boost;
-            }
-        }
-    }
-}
-
-/// Масштаб портала по номеру волны (эскалация визуала)
-fn portal_scale_for_wave(wave: u32) -> f32 {
-    match wave {
-        0..=4 => 1.0,    // 3м диаметр
-        5..=9 => 1.333,  // 4м диаметр
-        _ => 1.667,      // 5м диаметр
-    }
 }
 
 // ─── Частицы порталов ──────────────────────────────────────────────
