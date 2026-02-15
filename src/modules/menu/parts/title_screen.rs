@@ -227,7 +227,7 @@ pub fn title_screen_interaction(
     }
 
     if start {
-        fade.start_fade(GameState::Playing, false);
+        fade.start_fade(GameState::Loading, false);
     }
 }
 

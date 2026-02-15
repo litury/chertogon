@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
 use crate::modules::enemies::EnemyCoreSet;
-use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics, adaptive_scale};
+use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics, adaptive_scale, loading_screen};
 
 pub struct MenuPlugin;
 
@@ -23,6 +23,11 @@ impl Plugin for MenuPlugin {
                 title_screen::remove_loading_overlay,
             ).run_if(in_state(GameState::TitleScreen)))
             .add_systems(OnExit(GameState::TitleScreen), title_screen::cleanup_title_screen)
+            // Loading Screen
+            .add_systems(OnEnter(GameState::Loading), loading_screen::setup_loading_screen)
+            .add_systems(Update, loading_screen::update_loading_progress
+                .run_if(in_state(GameState::Loading)))
+            .add_systems(OnExit(GameState::Loading), loading_screen::cleanup_loading_screen)
             // HUD
             .add_systems(OnEnter(GameState::Playing), (hud::setup_hud, fps_counter::setup_fps))
             .add_systems(Update, (hud::update_hud, hud::update_timer_text, hud::update_hp_bar, hud::update_xp_bar, fps_counter::update_fps).after(EnemyCoreSet).run_if(in_state(GameState::Playing)))

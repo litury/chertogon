@@ -243,7 +243,7 @@ pub fn game_over_interaction(
 
     for interaction in &restart_query {
         if *interaction == Interaction::Pressed {
-            fade.start_fade(GameState::Playing, true);
+            fade.start_fade(GameState::Loading, true);
         }
     }
     for interaction in &menu_query {

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 pub enum GameState {
     #[default]
     TitleScreen,
+    Loading,
     Playing,
     GameOver,
 }
