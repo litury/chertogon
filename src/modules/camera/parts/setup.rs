@@ -1,21 +1,25 @@
 use bevy::prelude::*;
-use bevy::post_process::bloom::Bloom;
 use bevy::anti_alias::fxaa::Fxaa;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use bevy::post_process::bloom::Bloom;
 use bevy::render::view::{ColorGrading, ColorGradingGlobal, ColorGradingSection};
+use bevy::light::ShadowFilteringMethod;
 use crate::shared::constants::{CAMERA_OFFSET_Y, CAMERA_OFFSET_Z};
 
 pub fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
 
-        // MSAA выключен — используем FXAA (MSAA ломает WebGPU)
+        // MSAA выключен — используем FXAA
         Msaa::Off,
 
         // Tonemapping: AgX — лучший для тёмных сцен
         Tonemapping::AgX,
 
-        // Color Grading — тени/средние/хайлайты
+        // Anti-aliasing (FXAA — лёгкий, работает везде)
+        Fxaa::default(),
+
+        // Color Grading — параметры tonemapping шейдера
         ColorGrading {
             global: ColorGradingGlobal {
                 exposure: 0.2,
@@ -37,9 +41,6 @@ pub fn setup_camera(mut commands: Commands) {
             ..default()
         },
 
-        // Anti-aliasing (FXAA — безопасен на WebGPU)
-        Fxaa::default(),
-
         // Bloom — ореол вокруг эмиссивных источников
         Bloom {
             intensity: 0.25,
@@ -48,7 +49,7 @@ pub fn setup_camera(mut commands: Commands) {
             ..default()
         },
 
-        // Atmospheric Fog — работает на WebGPU
+        // Atmospheric Fog — затемнение дальних объектов
         DistanceFog {
             color: Color::srgb(0.10, 0.08, 0.15),
             directional_light_color: Color::srgb(0.15, 0.12, 0.25),
@@ -59,6 +60,9 @@ pub fn setup_camera(mut commands: Commands) {
                 Color::srgb(0.08, 0.07, 0.14),
             ),
         },
+
+        // Мягкие тени (Gaussian 5×5 PCF, стиль Diablo 2)
+        ShadowFilteringMethod::Gaussian,
 
         Transform::from_xyz(0.0, CAMERA_OFFSET_Y, CAMERA_OFFSET_Z)
             .looking_at(Vec3::ZERO, Vec3::Y),

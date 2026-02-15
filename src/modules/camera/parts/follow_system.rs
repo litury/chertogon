@@ -7,16 +7,17 @@ use crate::shared::constants::{
     CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX, CAMERA_ZOOM_SPEED, CAMERA_ZOOM_SMOOTHNESS
 };
 
-/// Система обработки зума камеры (mouse wheel)
+/// Система обработки зума камеры (mouse wheel + pinch-to-zoom)
 pub fn camera_zoom_system(
-    input_state: Res<InputState>,
+    mut input_state: ResMut<InputState>,
     mut camera_zoom: ResMut<CameraZoom>,
     time: Res<Time>,
 ) {
-    // Обрабатываем mouse wheel input
+    // Обрабатываем zoom input (mouse wheel или pinch gesture)
     if input_state.zoom_delta.abs() > 0.01 {
         camera_zoom.target_distance -= input_state.zoom_delta * CAMERA_ZOOM_SPEED;
         camera_zoom.target_distance = camera_zoom.target_distance.clamp(CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+        input_state.zoom_delta = 0.0; // Сброс после применения
     }
 
     // Frame-rate independent smoothing (exponential decay)
