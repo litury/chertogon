@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::VertexAttributeValues;
 use avian3d::prelude::*;
+use bevy::light::DirectionalLightShadowMap;
 use crate::toolkit::asset_paths;
 use super::torch_flicker::TorchFlicker;
 
@@ -180,6 +181,9 @@ pub fn setup_scene(
 
         commands.entity(torch_parent).add_children(&[model, fire]);
     }
+
+    // Shadow map 1024 (вместо дефолтных 2048) — экономия памяти
+    commands.insert_resource(DirectionalLightShadowMap { size: 1024 });
 
     info!("Arena setup complete: 50x50m with walls, torches, lighting");
 }
