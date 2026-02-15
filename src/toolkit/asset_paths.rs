@@ -46,6 +46,10 @@ pub const WALL_PANEL: &str = "models/environment/wall_panel.glb#Scene0";
 // Факел (Meshy GLB — кованый кронштейн с пламенем)
 pub const TORCH: &str = "models/environment/torch.glb#Scene0";
 
+// Порталы (Meshy GLB — Разломы Нави)
+pub const PORTAL_FIRE: &str = "models/environment/portal_fire.glb#Scene0";
+pub const PORTAL_DARK: &str = "models/environment/portal_dark.glb#Scene0";
+
 // Пол арены — seamless PBR текстуры с Polyhaven (stone_tiles, 1K)
 pub const FLOOR_DIFF: &str = "textures/stone_floor_diff.jpg";
 pub const FLOOR_NORMAL: &str = "textures/stone_floor_nor.jpg";
@@ -58,10 +62,10 @@ pub const FOG_NOISE: &str = "volumes/fog_noise.ktx2";
 pub const SWORD_MODEL: &str = "models/weapons/runic_sword.glb#Scene0";
 
 // Портреты персонажей (AI-generated, nano-banana)
-pub const PORTRAIT_BOGATYR: &str = "textures/ui/portraits/bogatyr_portrait.png";
+pub const PORTRAIT_BOGATYR: &str = "textures/ui/portraits/bogatyr_portrait.jpg";
 pub const PORTRAIT_UPYR: &str = "textures/ui/portraits/upyr_portrait.png";
 pub const PORTRAIT_LESHIY: &str = "textures/ui/portraits/leshiy_portrait.png";
-pub const PORTRAIT_VOLKOLAK: &str = "textures/ui/portraits/volkolak_portrait.png";
+pub const PORTRAIT_VOLKOLAK: &str = "textures/ui/portraits/volkolak_portrait.jpg";
 
 // UI фоны
 pub const TITLE_BG: &str = "textures/ui/title_bg.jpg";
