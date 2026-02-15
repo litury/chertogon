@@ -46,3 +46,65 @@ body {
   background-color: var(--color-gold);
   color: var(--color-stone-wall);
 }
+
+/* ===== Forged Title Effect ===== */
+
+.forged-title {
+  position: relative;
+  display: inline-block;
+}
+
+/* Слой свечения за текстом — пульсирующий огонь */
+.forged-title-glow {
+  position: absolute;
+  inset: 0;
+  color: var(--color-title-glow);
+  filter: blur(20px);
+  animation: forge-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Основной текст — металлический градиент */
+.forged-title-text {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    #FF8040 0%,
+    #FF4020 20%,
+    #D91F14 45%,
+    #8B0000 75%,
+    #4A0505 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8))
+          drop-shadow(0 0 40px rgba(255, 128, 26, 0.3));
+}
+
+/* 3D глубина — тень-дубликат */
+.forged-title-depth {
+  position: absolute;
+  inset: 0;
+  color: #1A0000;
+  transform: translate(3px, 3px);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.6;
+}
+
+@keyframes forge-pulse {
+  0%, 100% { opacity: 0.4; filter: blur(20px); }
+  50% { opacity: 0.7; filter: blur(25px); }
+}
+
+/* Мерцание огня — мелкая вариация */
+@keyframes forge-flicker {
+  0%, 100% { opacity: 1; }
+  5% { opacity: 0.95; }
+  10% { opacity: 1; }
+  42% { opacity: 0.97; }
+  44% { opacity: 1; }
+  80% { opacity: 0.98; }
+}

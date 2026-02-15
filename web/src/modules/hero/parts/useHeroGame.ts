@@ -17,28 +17,14 @@ export function useHeroGame() {
   const [phase, setPhase] = useState<HeroPhase>("loading");
   const isMobile = detectMobile();
 
-  // WebGPU проверка при монтировании — если нет, переключаем на fallback
+  // WebGL2 проверка при монтировании — если нет, переключаем на fallback
   useEffect(() => {
-    if (isMobile) {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) {
       setPhase("fallback");
-      return;
     }
-
-    async function check() {
-      if (!navigator.gpu) {
-        setPhase("fallback");
-        return;
-      }
-      try {
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) setPhase("fallback");
-        // если adapter есть — остаёмся в "loading" (iframe уже создан)
-      } catch {
-        setPhase("fallback");
-      }
-    }
-    check();
-  }, [isMobile]);
+  }, []);
 
   const handleGameLoaded = useCallback(() => {
     setPhase("ready");

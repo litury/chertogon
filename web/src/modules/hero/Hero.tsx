@@ -19,10 +19,10 @@ export function Hero() {
     >
       <HeroBackground />
 
-      <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-16">
+      <div className="relative z-10 flex min-h-screen flex-col items-center justify-start px-6 py-4 pt-[max(1rem,env(safe-area-inset-top))] md:justify-center md:py-16">
         {/* Подзаголовок */}
         <motion.p
-          className="mb-4 text-sm font-medium tracking-[0.3em] text-parchment/70 uppercase"
+          className="mb-1 text-sm font-medium tracking-[0.3em] text-parchment/70 uppercase md:mb-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
@@ -30,16 +30,25 @@ export function Hero() {
           Славянский Dark Fantasy
         </motion.p>
 
-        {/* Заголовок — Ruslan Display */}
-        <motion.h1
-          className="text-6xl font-black tracking-wider text-title-red drop-shadow-[0_0_30px_var(--color-title-glow)] md:text-8xl lg:text-9xl"
+        {/* Заголовок — кованый огненный эффект */}
+        <motion.div
+          className="forged-title text-4xl font-black tracking-wider md:text-8xl lg:text-9xl"
           style={{ fontFamily: "var(--font-title)" }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
         >
-          {GAME_TITLE}
-        </motion.h1>
+          {/* 3D глубина — тень позади */}
+          <span className="forged-title-depth" aria-hidden="true">
+            {GAME_TITLE}
+          </span>
+          {/* Огненное свечение — пульсирует */}
+          <span className="forged-title-glow" aria-hidden="true">
+            {GAME_TITLE}
+          </span>
+          {/* Основной текст — металлический градиент */}
+          <h1 className="forged-title-text">{GAME_TITLE}</h1>
+        </motion.div>
 
         {/* Золотая орнаментальная линия */}
         <motion.div
@@ -51,14 +60,14 @@ export function Hero() {
 
         {/* Бокс с игрой ИЛИ fallback */}
         {phase === "fallback" ? (
-          <FallbackContent isMobile={isMobile} />
+          <FallbackContent />
         ) : (
-          <HeroGameBox phase={phase} onGameLoaded={handleGameLoaded} />
+          <HeroGameBox phase={phase} isMobile={isMobile} onGameLoaded={handleGameLoaded} />
         )}
 
         {/* Scroll hint */}
         <motion.div
-          className="mt-8"
+          className="mt-8 hidden md:block"
           animate={{ y: [0, 10, 0] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
@@ -83,8 +92,8 @@ export function Hero() {
   );
 }
 
-/** Fallback для мобильных / без WebGPU */
-function FallbackContent({ isMobile }: { isMobile: boolean }) {
+/** Fallback — браузер без WebGL2 */
+function FallbackContent() {
   return (
     <div className="mt-8 text-center">
       <motion.p
@@ -111,26 +120,14 @@ function FallbackContent({ isMobile }: { isMobile: boolean }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 1.5 }}
       >
-        {isMobile ? (
-          <div className="max-w-md text-center">
-            <p className="font-display text-lg text-torch">
-              Играй на десктопе
-            </p>
-            <p className="mt-2 text-sm text-fog">
-              Игра использует WASD + мышь. Открой эту страницу на компьютере с
-              Chrome 113+.
-            </p>
-          </div>
-        ) : (
-          <div className="max-w-md rounded-lg border border-blood/40 bg-blood/10 p-6 text-center">
-            <p className="font-display text-lg text-blood-bright">
-              WebGPU не поддерживается
-            </p>
-            <p className="mt-2 text-sm text-fog">
-              Для запуска нужен Chrome 113+, Edge 113+ или последний Safari.
-            </p>
-          </div>
-        )}
+        <div className="max-w-md rounded-lg border border-blood/40 bg-blood/10 p-6 text-center">
+          <p className="font-display text-lg text-blood-bright">
+            WebGL2 не поддерживается
+          </p>
+          <p className="mt-2 text-sm text-fog">
+            Обновите браузер до последней версии.
+          </p>
+        </div>
       </motion.div>
     </div>
   );

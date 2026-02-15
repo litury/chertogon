@@ -4,15 +4,14 @@ import type { HeroPhase } from "./useHeroGame";
 
 interface Props {
   phase: HeroPhase;
+  isMobile: boolean;
   onGameLoaded: () => void;
 }
 
-const GAME_SRC = import.meta.env.DEV
-  ? "http://localhost:8080"
-  : "/game/index.html";
+const GAME_SRC = "/game/index.html";
 
 /** Бокс с игрой: спиннер при загрузке, iframe когда готово */
-export function HeroGameBox({ phase, onGameLoaded }: Props) {
+export function HeroGameBox({ phase, isMobile, onGameLoaded }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -38,11 +37,11 @@ export function HeroGameBox({ phase, onGameLoaded }: Props) {
   }, [phase]);
 
   return (
-    <div className="mt-8 w-full max-w-5xl">
+    <div className="mt-4 w-full max-w-5xl md:mt-8">
       {/* Рамка игры */}
       <div
         id="game-box"
-        className="relative aspect-video overflow-hidden rounded-lg border-2 border-gold/40 bg-stone-wall shadow-[0_0_40px_-5px_var(--color-gold),inset_0_0_30px_-10px_var(--color-rune-blue)]"
+        className="relative h-[calc(100svh-120px)] overflow-hidden rounded-lg border-2 border-gold/40 bg-stone-wall shadow-[0_0_40px_-5px_var(--color-gold),inset_0_0_30px_-10px_var(--color-rune-blue)] md:h-auto md:aspect-video"
       >
         {/* Спиннер загрузки */}
         <AnimatePresence>
@@ -65,6 +64,7 @@ export function HeroGameBox({ phase, onGameLoaded }: Props) {
           ref={iframeRef}
           src={GAME_SRC}
           className="h-full w-full border-0"
+          style={{ touchAction: "none" }}
           onLoad={onGameLoaded}
           allow="gamepad; fullscreen; autoplay"
           title="ЧЕРТОГОН — Игра"
@@ -80,7 +80,11 @@ export function HeroGameBox({ phase, onGameLoaded }: Props) {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <span>WASD — движение &middot; Shift — бег &middot; Колесо — зум</span>
+            <span>
+              {isMobile
+                ? "Тапни и тяни — движение · Дальше = бег"
+                : "WASD — движение · Shift — бег · Колесо — зум"}
+            </span>
             <button
               onClick={toggleFullscreen}
               className="text-gold/60 transition-colors hover:text-gold"
