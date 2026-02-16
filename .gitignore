@@ -37,7 +37,7 @@ scripts/package-lock.json
 # Landing page (web/)
 web/node_modules/
 web/dist/
-web/public/game/
+
 
 # WASM build output
 dist/
