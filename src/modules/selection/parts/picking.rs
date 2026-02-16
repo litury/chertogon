@@ -64,6 +64,7 @@ pub fn pick_character_at_screen_pos(
 
 /// Сбрасывает выделение если персонаж умер или был despawned.
 pub fn clear_dead_selection(
+    mut commands: Commands,
     mut selection: ResMut<SelectionState>,
     enemies: Query<(), (With<Enemy>, Without<EnemyDying>)>,
     player_health: Query<&PlayerHealth, With<Player>>,
@@ -80,6 +81,9 @@ pub fn clear_dead_selection(
             return; // жив — оставляем
         }
     }
-    // Entity не враг и не живой игрок — сбрасываем
+    // Снимаем Selected → триггерит RemovedComponents<Selected> → despawn RangeIndicator
+    if let Ok(mut cmd) = commands.get_entity(entity) {
+        cmd.remove::<Selected>();
+    }
     selection.selected_entity = None;
 }

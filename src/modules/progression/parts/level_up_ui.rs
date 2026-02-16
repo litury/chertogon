@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use crate::modules::progression::components::*;
 use crate::modules::player::components::{Player, PlayerStats};
 use crate::modules::combat::components::{Weapon, PlayerHealth};
+use crate::modules::menu::KillFeedMessage;
 use crate::toolkit::asset_paths;
 use super::upgrades;
 
@@ -50,7 +51,6 @@ pub fn spawn_level_up_ui(
     )).with_children(|parent| {
         // Заголовок "НОВЫЙ УРОВЕНЬ!"
         parent.spawn((
-            LevelUpUI,
             Text::new("НОВЫЙ УРОВЕНЬ!"),
             TextFont {
                 font: font_bold.clone(),
@@ -66,7 +66,6 @@ pub fn spawn_level_up_ui(
 
         // Контейнер карточек
         parent.spawn((
-            LevelUpUI,
             Node {
                 flex_direction: FlexDirection::Row,
                 justify_content: JustifyContent::Center,
@@ -93,7 +92,6 @@ pub fn spawn_level_up_ui(
 
                 // Карточка
                 row.spawn((
-                    LevelUpUI,
                     UpgradeCard { index: i, upgrade_id },
                     Button,
                     Node {
@@ -111,7 +109,6 @@ pub fn spawn_level_up_ui(
                 )).with_children(|card| {
                     // Категория
                     card.spawn((
-                        LevelUpUI,
                         Text::new(category_text),
                         TextFont {
                             font: font_ui.clone(),
@@ -123,7 +120,6 @@ pub fn spawn_level_up_ui(
 
                     // Название
                     card.spawn((
-                        LevelUpUI,
                         Text::new(def.name),
                         TextFont {
                             font: font_bold.clone(),
@@ -135,7 +131,6 @@ pub fn spawn_level_up_ui(
 
                     // Описание
                     card.spawn((
-                        LevelUpUI,
                         Text::new(def.description),
                         TextFont {
                             font: font_ui.clone(),
@@ -147,7 +142,6 @@ pub fn spawn_level_up_ui(
 
                     // Уровень
                     card.spawn((
-                        LevelUpUI,
                         Text::new(format!("Ур. {}/{}", current_level + 1, def.max_level)),
                         TextFont {
                             font: font_ui.clone(),
@@ -159,7 +153,6 @@ pub fn spawn_level_up_ui(
 
                     // Кнопка-подсказка [N]
                     card.spawn((
-                        LevelUpUI,
                         Text::new(format!("[{}]", i + 1)),
                         TextFont {
                             font: font_bold.clone(),
@@ -182,8 +175,9 @@ pub fn level_up_interaction_system(
     mut player_query: Query<(&mut Weapon, &mut PlayerHealth, &mut PlayerStats), With<Player>>,
     cards: Query<(&Interaction, &UpgradeCard), Changed<Interaction>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    ui_entities: Query<Entity, With<LevelUpUI>>,
+    ui_entities: Query<Entity, (With<LevelUpUI>, Without<ChildOf>)>,
     mut commands: Commands,
+    mut feed: MessageWriter<KillFeedMessage>,
 ) {
     if !level_up_state.is_active {
         return;
@@ -230,6 +224,20 @@ pub fn level_up_interaction_system(
         health.current = (health.current + 5.0).min(health.max);
     }
 
+    // Kill feed уведомление об апгрейде
+    if let Some(def) = upgrades::get_upgrade_def(&upgrade_id) {
+        let color = match def.category {
+            UpgradeCategory::Attack => Color::srgb(0.9, 0.3, 0.2),
+            UpgradeCategory::Defense => Color::srgb(0.3, 0.6, 0.9),
+            UpgradeCategory::Path => Color::srgb(0.3, 0.9, 0.4),
+        };
+        feed.write(KillFeedMessage {
+            text: format!("{}: {}", def.name, def.description),
+            color,
+            group_key: None,
+        });
+    }
+
     // Закрываем UI
     level_up_state.is_active = false;
     level_up_state.offered_upgrades.clear();
@@ -269,7 +277,7 @@ pub fn card_hover_system(
 /// Удаляет level-up UI при новом ране
 pub fn cleanup_level_up_ui(
     mut commands: Commands,
-    ui_entities: Query<Entity, With<LevelUpUI>>,
+    ui_entities: Query<Entity, (With<LevelUpUI>, Without<ChildOf>)>,
     mut level_up_state: ResMut<LevelUpState>,
 ) {
     for entity in &ui_entities {

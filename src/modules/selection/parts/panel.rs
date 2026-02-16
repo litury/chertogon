@@ -16,7 +16,7 @@ pub fn manage_selection_panel(
     players: Query<(&PlayerHealth, &Weapon), With<Player>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    existing_panels: Query<Entity, With<SelectionPanelUI>>,
+    existing_panels: Query<Entity, (With<SelectionPanelUI>, Without<ChildOf>)>,
 ) {
     if !selection.is_changed() {
         return;
@@ -56,20 +56,25 @@ fn spawn_panel_root(
         SelectionPanelUI,
         Node {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(16.0),
+            bottom: Val::Px(60.0),
             left: Val::Percent(50.0),
             margin: UiRect::left(Val::Px(-170.0)),
             width: Val::Px(340.0),
-            padding: UiRect::all(Val::Px(10.0)),
+            padding: UiRect {
+                left: Val::Px(32.0),
+                right: Val::Px(32.0),
+                top: Val::Px(20.0),
+                bottom: Val::Px(8.0),
+            },
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             column_gap: Val::Px(12.0),
             border: UiRect::all(Val::Px(1.5)),
             border_radius: BorderRadius::all(Val::Px(8.0)),
+            overflow: Overflow::clip(),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.06, 0.04, 0.1, 0.92)),
-        BorderColor::all(Color::srgba(0.95, 0.7, 0.2, 0.5)),
+        ImageNode::new(asset_server.load(asset_paths::UI_PANEL_BG)),
         BoxShadow(vec![ShadowStyle {
             color: Color::srgba(0.95, 0.7, 0.2, 0.12),
             x_offset: Val::Px(0.0),
@@ -84,8 +89,8 @@ fn spawn_panel_root(
             SelectionPanelUI,
             SelectionPortrait,
             Node {
-                width: Val::Px(80.0),
-                height: Val::Px(80.0),
+                width: Val::Px(64.0),
+                height: Val::Px(64.0),
                 border: UiRect::all(Val::Px(1.5)),
                 border_radius: BorderRadius::all(Val::Px(4.0)),
                 ..default()
@@ -108,7 +113,7 @@ fn spawn_info_column(
     hp_current: f32,
     hp_max: f32,
     hp_color: Color,
-    stats: &[(&str, String)],
+    stats: &[(&str, String, &str)],
     asset_server: &AssetServer,
 ) {
     let font_title = asset_server.load(asset_paths::FONT_TITLE);
@@ -120,7 +125,7 @@ fn spawn_info_column(
         SelectionPanelUI,
         Node {
             flex_direction: FlexDirection::Column,
-            row_gap: Val::Px(4.0),
+            row_gap: Val::Px(3.0),
             flex_grow: 1.0,
             ..default()
         },
@@ -129,7 +134,7 @@ fn spawn_info_column(
         info.spawn((
             SelectionPanelUI,
             Text::new(name),
-            TextFont { font: font_title, font_size: 22.0, ..default() },
+            TextFont { font: font_title, font_size: 20.0, ..default() },
             TextColor(Color::srgb(0.95, 0.7, 0.2)),
             TextShadow {
                 offset: Vec2::new(1.5, 1.5),
@@ -142,7 +147,7 @@ fn spawn_info_column(
             SelectionPanelUI,
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Px(14.0),
+                height: Val::Px(12.0),
                 border_radius: BorderRadius::all(Val::Px(3.0)),
                 overflow: Overflow::clip(),
                 ..default()
@@ -162,44 +167,62 @@ fn spawn_info_column(
             ));
         });
 
-        // HP текст
-        info.spawn((
-            SelectionPanelUI,
-            SelectionHpText,
-            Text::new(format!("{} / {}", hp_current as i32, hp_max as i32)),
-            TextFont { font: font_ui_bold, font_size: 14.0, ..default() },
-            TextColor(Color::srgb(0.85, 0.8, 0.7)),
-            TextShadow {
-                offset: Vec2::new(1.0, 1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.7),
-            },
-        ));
-
-        // Статы
+        // Ряд: HP текст + статы
         info.spawn((
             SelectionPanelUI,
             Node {
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(16.0),
-                margin: UiRect::top(Val::Px(2.0)),
+                justify_content: JustifyContent::SpaceBetween,
+                align_items: AlignItems::Center,
+                width: Val::Percent(100.0),
                 ..default()
             },
-        )).with_children(|stats_row| {
-            let stat_style = TextFont { font: font_ui.clone(), font_size: 13.0, ..default() };
-            let stat_color = TextColor(Color::srgb(0.65, 0.6, 0.55));
-            let stat_shadow = TextShadow {
-                offset: Vec2::new(1.0, 1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.6),
-            };
-
-            for (_label, text) in stats {
-                stats_row.spawn((
+        )).with_children(|row| {
+            // HP текст (лево)
+            row.spawn((
+                SelectionPanelUI,
+                SelectionHpText,
+                Text::new(format!("{}/{}", hp_current as i32, hp_max as i32)),
+                TextFont { font: font_ui_bold, font_size: 14.0, ..default() },
+                TextColor(Color::srgb(0.95, 0.9, 0.8)),
+                TextShadow {
+                    offset: Vec2::new(1.0, 1.0),
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.9),
+                },
+            ));
+            // Статы с иконками (право)
+            for (_label, value, icon_path) in stats {
+                row.spawn((
                     SelectionPanelUI,
-                    Text::new(text.clone()),
-                    stat_style.clone(),
-                    stat_color,
-                    stat_shadow,
-                ));
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(2.0),
+                        ..default()
+                    },
+                )).with_children(|stat| {
+                    // Иконка
+                    stat.spawn((
+                        SelectionPanelUI,
+                        Node {
+                            width: Val::Px(14.0),
+                            height: Val::Px(14.0),
+                            ..default()
+                        },
+                        ImageNode::new(asset_server.load(icon_path.to_string())),
+                    ));
+                    // Значение
+                    stat.spawn((
+                        SelectionPanelUI,
+                        Text::new(value.clone()),
+                        TextFont { font: font_ui.clone(), font_size: 14.0, ..default() },
+                        TextColor(Color::srgb(0.85, 0.8, 0.7)),
+                        TextShadow {
+                            offset: Vec2::new(1.0, 1.0),
+                            color: Color::srgba(0.0, 0.0, 0.0, 0.85),
+                        },
+                    ));
+                });
             }
         });
     }).id();
@@ -227,9 +250,9 @@ fn build_enemy_panel(
         EnemyType::Volkolak => Color::srgb(0.5, 0.5, 0.65),
     };
     let stats = vec![
-        ("damage", format!("Урон: {:.0}", attack_cd.damage)),
-        ("speed", format!("Скор: {:.0}", chase.speed)),
-        ("range", format!("Рад: {:.1}м", chase.attack_range)),
+        ("damage", format!("{:.0}", attack_cd.damage), asset_paths::ICON_DAMAGE),
+        ("speed", format!("{:.0}", chase.speed), asset_paths::ICON_SPEED),
+        ("range", format!("{:.1}м", chase.attack_range), asset_paths::ICON_RANGE),
     ];
 
     let root = spawn_panel_root(commands, asset_server, portrait_path);
@@ -245,9 +268,9 @@ fn build_player_panel(
 ) {
     let hp_color = Color::srgb(0.95, 0.7, 0.2);
     let stats = vec![
-        ("damage", format!("Урон: {:.0}", weapon.damage)),
-        ("range", format!("Рад: {:.1}м", weapon.range)),
-        ("cooldown", format!("КД: {:.1}с", weapon.cooldown)),
+        ("damage", format!("{:.0}", weapon.damage), asset_paths::ICON_DAMAGE),
+        ("range", format!("{:.1}м", weapon.range), asset_paths::ICON_RANGE),
+        ("cooldown", format!("{:.1}с", weapon.cooldown), asset_paths::ICON_SPEED),
     ];
 
     let root = spawn_panel_root(commands, asset_server, portrait_path);
@@ -305,7 +328,7 @@ pub fn update_selection_panel(
 /// Удаляет UI панели при выходе из Playing.
 pub fn cleanup_selection_panel(
     mut commands: Commands,
-    query: Query<Entity, With<SelectionPanelUI>>,
+    query: Query<Entity, (With<SelectionPanelUI>, Without<ChildOf>)>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn();
