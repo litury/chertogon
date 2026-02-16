@@ -48,13 +48,14 @@ pub fn handle_touch_input(
     // Движение — ТОЛЬКО по primary finger (защита от multi-touch)
     if let Some(primary_id) = input_state.primary_touch_id {
         if let Some(touch) = touches.iter().find(|t| t.id() == primary_id) {
+            input_state.touch_current = Some(touch.position());
             if let Some(start_pos) = input_state.touch_start {
                 let delta = touch.position() - start_pos;
                 let distance = delta.length();
 
                 if distance > DEAD_ZONE {
                     let direction = delta.normalize();
-                    // Screen X → World X, Screen Y → World -Z (инвертируем)
+                    // Screen X → World X, Screen Y → World Z
                     input_state.movement = Vec3::new(direction.x, 0.0, direction.y);
                     input_state.is_running = distance > RUN_THRESHOLD;
                 }
@@ -69,6 +70,7 @@ pub fn handle_touch_input(
             input_state.is_running = false;
             input_state.is_touch_active = false;
             input_state.touch_start = None;
+            input_state.touch_current = None;
             input_state.primary_touch_id = None;
         }
     }
@@ -80,6 +82,7 @@ pub fn handle_touch_input(
             input_state.is_running = false;
             input_state.is_touch_active = false;
             input_state.touch_start = None;
+            input_state.touch_current = None;
             input_state.primary_touch_id = None;
         }
     }
@@ -89,6 +92,7 @@ pub fn handle_touch_input(
         input_state.movement = Vec3::ZERO;
         input_state.is_touch_active = false;
         input_state.touch_start = None;
+        input_state.touch_current = None;
         input_state.primary_touch_id = None;
     }
 }

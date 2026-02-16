@@ -23,8 +23,12 @@ pub fn handle_keyboard_input(
         movement.x += 1.0;
     }
 
+    // Флаг для WC3/Dota override: WASD > auto-play
+    input_state.has_keyboard_input = movement.length() > 0.0;
+
     // Клавиатура пишет movement ТОЛЬКО если есть нажатые клавиши
     // или touch не активен (чтобы не перезаписать touch drag нулём)
+    // Auto-play перезапишет в свою очередь (запускается .after())
     if movement.length() > 0.0 {
         input_state.movement = movement.normalize();
         input_state.is_running = keyboard.pressed(KeyCode::ShiftLeft)

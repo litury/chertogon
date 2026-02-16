@@ -11,4 +11,8 @@ pub struct InputState {
     pub is_touch_active: bool,           // Активно ли касание в данный момент
     pub primary_touch_id: Option<u64>,   // ID пальца для движения (защита от multi-touch)
     pub pinch_distance: Option<f32>,     // Расстояние между двумя пальцами (для зума)
+    pub touch_current: Option<Vec2>,     // Текущая позиция primary пальца (для joystick визуала)
+
+    // Keyboard state (для WC3/Dota override)
+    pub has_keyboard_input: bool,        // WASD нажат в этом кадре (auto-play уступает)
 }
