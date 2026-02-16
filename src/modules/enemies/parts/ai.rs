@@ -7,6 +7,8 @@ use crate::modules::combat::components::EnemyAttackCooldown;
 use crate::modules::combat::parts::knockback::{Staggered, StaggerRecovery};
 use crate::modules::world::GroundCircle;
 use crate::modules::combat::parts::game_over::KillCount;
+use crate::modules::menu::KillFeedMessage;
+use crate::modules::selection::components::Selected;
 use bevy::ecs::system::Commands;
 
 /// Система AI: враги реагируют на игрока по дистанции
@@ -109,11 +111,11 @@ pub fn enemy_ai_system(
         // Поворачиваем child модель лицом к игроку (только в агро)
         if distance <= chase.aggro_range && direction_2d.length() > 0.01 {
             let target_rotation = Quat::from_rotation_y(direction_2d.x.atan2(direction_2d.z));
-            let t = 1.0 - (-8.0 * dt).exp();
+            let t = (8.0 * dt).min(1.0);
 
             for &child in children {
                 if let Ok(mut model_transform) = model_query.get_mut(child) {
-                    model_transform.rotation = model_transform.rotation.slerp(target_rotation, t);
+                    model_transform.rotation = model_transform.rotation.lerp(target_rotation, t).normalize();
                 }
             }
         }
@@ -124,23 +126,41 @@ pub fn enemy_ai_system(
 pub fn start_enemy_death(
     mut commands: Commands,
     mut enemies: Query<
-        (Entity, &Health, &Children, &mut EnemyAnimState, &mut LinearVelocity),
+        (Entity, &Health, &EnemyType, &Children, &mut EnemyAnimState, &mut LinearVelocity),
         (With<Enemy>, Without<EnemyDying>)
     >,
     ground_circles: Query<Entity, With<GroundCircle>>,
     mut kill_count: ResMut<KillCount>,
+    mut feed: MessageWriter<KillFeedMessage>,
 ) {
-    for (entity, health, children, mut anim_state, mut velocity) in &mut enemies {
+    for (entity, health, enemy_type, children, mut anim_state, mut velocity) in &mut enemies {
         if health.is_dead() {
             kill_count.total += 1;
+            match enemy_type {
+                EnemyType::Upyr => kill_count.upyr += 1,
+                EnemyType::Leshiy => kill_count.leshiy += 1,
+                EnemyType::Volkolak => kill_count.volkolak += 1,
+            }
             debug!("💀 Enemy dying — playing death animation (kills: {})", kill_count.total);
+
+            // Kill feed уведомление
+            let name = match enemy_type {
+                EnemyType::Upyr => "Упырь",
+                EnemyType::Leshiy => "Леший",
+                EnemyType::Volkolak => "Волколак",
+            };
+            feed.write(KillFeedMessage {
+                text: format!("{} убит!", name),
+                color: Color::srgb(0.9, 0.8, 0.7),
+                group_key: Some(name.to_string()),
+            });
             anim_state.current = EnemyAnim::Dying;
             velocity.0 = Vec3::ZERO;
 
-            // Деспавним ground circle при смерти
+            // Скрываем ground circle при смерти (удалится вместе с трупом)
             for child in children.iter() {
                 if ground_circles.get(child).is_ok() {
-                    commands.entity(child).despawn();
+                    commands.entity(child).insert(Visibility::Hidden);
                 }
             }
 
@@ -148,12 +168,37 @@ pub fn start_enemy_death(
                 .insert(EnemyDying {
                     timer: Timer::from_seconds(3.0, TimerMode::Once),
                 })
+                // AI + gameplay
+                .remove::<Selected>()
                 .remove::<ChasePlayer>()
+                .remove::<OrbitDirection>()
+                .remove::<SpawnScream>()
+                .remove::<HasAttackSlot>()
+                .remove::<EnemyAttackAnimTimer>()
+                .remove::<Staggered>()
+                .remove::<StaggerRecovery>()
+                // Физика: RigidBody + Collider + все производные Avian3D
                 .remove::<RigidBody>()
                 .remove::<Collider>()
                 .remove::<LinearVelocity>()
+                .remove::<AngularVelocity>()
                 .remove::<LinearDamping>()
-                .remove::<AngularDamping>();
+                .remove::<AngularDamping>()
+                .remove::<CollisionLayers>()
+                .remove::<LockedAxes>()
+                // Derived-компоненты Avian3D (не удаляются автоматически с RigidBody)
+                .remove::<(
+                    ComputedMass,
+                    ComputedAngularInertia,
+                    ComputedCenterOfMass,
+                    ColliderDensity,
+                    ColliderMassProperties,
+                    SleepThreshold,
+                    SleepTimer,
+                    Position,
+                    Rotation,
+                    ColliderAabb,
+                )>();
         }
     }
 }
@@ -211,6 +256,24 @@ pub fn strip_corpse_system(
                     }
                 }
             }
+        }
+    }
+}
+
+/// Максимум трупов на сцене (каждый = entity + GLB scene ~20 sub-entities)
+const MAX_CORPSES: usize = 10;
+
+/// Удаляет старейшие трупы при превышении лимита
+pub fn corpse_limit_system(
+    mut commands: Commands,
+    corpses: Query<Entity, With<EnemyCorpse>>,
+    mut buf: Local<Vec<Entity>>,
+) {
+    buf.clear();
+    buf.extend(corpses.iter());
+    if buf.len() > MAX_CORPSES {
+        for &entity in &buf[..buf.len() - MAX_CORPSES] {
+            commands.entity(entity).despawn();
         }
     }
 }

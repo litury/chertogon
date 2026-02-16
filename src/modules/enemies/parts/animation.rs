@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 use std::time::Duration;
+use avian3d::prelude::*;
 use crate::modules::enemies::components::*;
 use crate::modules::enemies::parts::spawner::EnemyAnimationIndices;
 
-/// Система настройки AnimationPlayer после загрузки GLB
-/// Бежит каждый кадр пока AnimationPlayer не будет найден в иерархии
+/// Система настройки AnimationPlayer после загрузки GLB.
+/// Бежит каждый кадр пока AnimationPlayer не будет найден в иерархии.
+/// Кэширует Entity AnimationPlayer на parent Enemy (CachedAnimPlayer).
 pub fn setup_enemy_animation(
-    enemies: Query<(&Children, &EnemyAnimState), With<Enemy>>,
+    enemies: Query<(Entity, &Children, &EnemyAnimState), With<Enemy>>,
     model_query: Query<(&Children, &EnemyAnimationIndices, &AnimationGraphHandle), With<EnemyModel>>,
     mut animation_players: Query<
         (Entity, &mut AnimationPlayer),
@@ -15,19 +17,19 @@ pub fn setup_enemy_animation(
     children: Query<&Children>,
     mut commands: Commands,
 ) {
-    for (enemy_children, anim_state) in &enemies {
+    for (enemy_entity, enemy_children, anim_state) in &enemies {
         for &model_child in enemy_children {
             if let Ok((model_children, anim_indices, graph_handle)) = model_query.get(model_child) {
                 let current_anim = anim_state.current;
                 'search: for &child in model_children {
                     if let Ok((entity, mut player)) = animation_players.get_mut(child) {
-                        setup_anim_player(entity, &mut player, anim_indices, graph_handle, current_anim, model_child, &mut commands);
+                        setup_anim_player(entity, &mut player, anim_indices, graph_handle, current_anim, enemy_entity, &mut commands);
                         break 'search;
                     }
                     if let Ok(grandchildren) = children.get(child) {
                         for &grandchild in grandchildren {
                             if let Ok((entity, mut player)) = animation_players.get_mut(grandchild) {
-                                setup_anim_player(entity, &mut player, anim_indices, graph_handle, current_anim, model_child, &mut commands);
+                                setup_anim_player(entity, &mut player, anim_indices, graph_handle, current_anim, enemy_entity, &mut commands);
                                 break 'search;
                             }
                         }
@@ -44,7 +46,7 @@ fn setup_anim_player(
     anim_indices: &EnemyAnimationIndices,
     graph_handle: &AnimationGraphHandle,
     current_anim: EnemyAnim,
-    model_child: Entity,
+    enemy_entity: Entity,
     commands: &mut Commands,
 ) {
     debug!("✅ Enemy AnimationPlayer found on {:?}! idle={:?}, walk={:?}, run={:?}, attack={:?}",
@@ -80,128 +82,118 @@ fn setup_anim_player(
     }
     commands.entity(entity).insert(transitions);
     commands.entity(entity).insert(EnemyAnimationSetupComplete);
-    commands.entity(model_child).remove::<EnemyAnimationIndices>();
+
+    // Кэшируем Entity AnimationPlayer на parent Enemy для O(1) доступа
+    commands.entity(enemy_entity).insert(CachedAnimPlayer { entity });
 
     debug!("🎬 Enemy animation setup done (state: {:?})", current_anim);
 }
 
-/// Переключение анимации врага на основе состояния
-/// Обходит иерархию: Enemy → EnemyModel children → AnimationPlayer
+/// Центральная система переходов анимации врагов.
+/// Единственное место где вызывается `transitions.play()`.
+/// Использует CachedAnimPlayer для O(1) доступа вместо обхода иерархии.
 pub fn enemy_animation_state_system(
-    enemies: Query<(&EnemyAnimState, &Children), (With<Enemy>, Changed<EnemyAnimState>)>,
-    model_query: Query<&Children, With<EnemyModel>>,
-    children_query: Query<&Children>,
+    mut enemies: Query<(&mut EnemyAnimState, &CachedAnimPlayer), With<Enemy>>,
     mut animation_query: Query<
         (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
         With<EnemyAnimationSetupComplete>
     >,
 ) {
-    for (anim_state, enemy_children) in &enemies {
-        'enemy: for &child in enemy_children {
-            if let Ok(model_children) = model_query.get(child) {
-                for &mc in model_children {
-                    if try_update_animation(&mut animation_query, mc, anim_state) {
-                        break 'enemy;
-                    }
-                    if let Ok(grandchildren) = children_query.get(mc) {
-                        for &gc in grandchildren {
-                            if try_update_animation(&mut animation_query, gc, anim_state) {
-                                break 'enemy;
-                            }
-                        }
-                    }
-                }
-            }
+    for (mut anim_state, cached) in &mut enemies {
+        if !anim_state.needs_transition() { continue; }
+
+        let Ok((animations, mut player, mut transitions)) = animation_query.get_mut(cached.entity) else {
+            continue;
+        };
+
+        let (animation_index, should_loop) = match anim_state.current {
+            EnemyAnim::Idle => (animations.idle, true),
+            EnemyAnim::Walking => (animations.walk, true),
+            EnemyAnim::Running => (animations.run, true),
+            EnemyAnim::Attacking => (animations.attack, false),
+            EnemyAnim::HitReaction => (animations.hit, false),
+            EnemyAnim::Screaming => (animations.scream, false),
+            EnemyAnim::Dying => (animations.death, false),
+        };
+
+        let transition = transitions.play(&mut player, animation_index, Duration::from_millis(200));
+        if should_loop {
+            transition.repeat();
         }
+        anim_state.mark_applied();
     }
 }
 
-fn try_update_animation(
-    animation_query: &mut Query<
-        (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
+/// Динамическая скорость анимации walk/run на основе реальной скорости движения.
+/// Без этого быстрые враги (Волколак 7.0, Леший 6.0) "скользят" — ноги не успевают за телом.
+/// Использует CachedAnimPlayer для O(1) доступа вместо обхода иерархии.
+pub fn enemy_anim_speed_system(
+    mut enemies: Query<
+        (&EnemyAnimState, &LinearVelocity, &ChasePlayer, &CachedAnimPlayer, &EnemyLod, &mut CachedAnimSpeed),
+        (With<Enemy>, Without<EnemyDying>)
+    >,
+    mut animation_query: Query<
+        (&EnemyAnimations, &mut AnimationPlayer),
         With<EnemyAnimationSetupComplete>
     >,
-    entity: Entity,
-    anim_state: &EnemyAnimState,
-) -> bool {
-    let Ok((animations, mut player, mut transitions)) = animation_query.get_mut(entity) else {
-        return false;
-    };
+) {
+    for (anim_state, velocity, chase, cached, lod, mut anim_speed) in &mut enemies {
+        // Minimal LOD: анимация заморожена, не обновляем скорость
+        if *lod == EnemyLod::Minimal { continue; }
 
-    let (animation_index, should_loop) = match anim_state.current {
-        EnemyAnim::Idle => (animations.idle, true),
-        EnemyAnim::Walking => (animations.walk, true),
-        EnemyAnim::Running => (animations.run, true),
-        EnemyAnim::Attacking => (animations.attack, false),
-        EnemyAnim::HitReaction => (animations.hit, false),
-        EnemyAnim::Screaming => (animations.scream, false),
-        EnemyAnim::Dying => (animations.death, false),
-    };
+        let reference_speed = match anim_state.current {
+            EnemyAnim::Walking => chase.anim_base_speed,
+            EnemyAnim::Running => chase.anim_base_speed * 1.8,
+            _ => continue,
+        };
 
-    let transition = transitions.play(&mut player, animation_index, Duration::from_millis(200));
-    if should_loop {
-        transition.repeat();
+        let actual_speed = velocity.0.length();
+        if actual_speed < 0.1 {
+            continue;
+        }
+
+        let speed_factor = (actual_speed / reference_speed).clamp(0.3, 4.0);
+
+        // Throttle: пропускаем если изменение < 5%
+        if (speed_factor - anim_speed.last_factor).abs() < anim_speed.last_factor * 0.05 {
+            continue;
+        }
+        anim_speed.last_factor = speed_factor;
+
+        // O(1) прямой lookup через кэш
+        let Ok((animations, mut player)) = animation_query.get_mut(cached.entity) else {
+            continue;
+        };
+
+        let index = match anim_state.current {
+            EnemyAnim::Walking => animations.walk,
+            EnemyAnim::Running => animations.run,
+            _ => continue,
+        };
+
+        if let Some(active) = player.animation_mut(index) {
+            active.set_speed(speed_factor);
+        }
     }
-
-    true
 }
 
 /// Повторяет анимацию атаки пока враг в Attacking состоянии.
 /// Синхронизирован с EnemyAttackCooldown (1.0с) — каждый удар имеет визуальный фидбек.
+/// Вместо прямого transitions.play() вызывает request_replay() —
+/// центральная система подхватит и переиграет без self-transition.
 pub fn enemy_attack_anim_replay_system(
     time: Res<Time>,
     mut enemies: Query<
-        (&mut EnemyAttackAnimTimer, &Children),
+        (&mut EnemyAttackAnimTimer, &mut EnemyAnimState),
         (With<Enemy>, Without<EnemyDying>)
     >,
-    model_query: Query<&Children, With<EnemyModel>>,
-    children_query: Query<&Children>,
-    mut animation_query: Query<
-        (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
-        With<EnemyAnimationSetupComplete>
-    >,
 ) {
-    for (mut anim_timer, enemy_children) in &mut enemies {
+    for (mut anim_timer, mut anim_state) in &mut enemies {
         anim_timer.timer.tick(time.delta());
-
-        if !anim_timer.timer.just_finished() {
-            continue;
-        }
-
-        // Переигрываем анимацию атаки через ту же иерархию
-        'enemy: for &child in enemy_children {
-            if let Ok(model_children) = model_query.get(child) {
-                for &mc in model_children {
-                    if try_replay_attack(&mut animation_query, mc) {
-                        break 'enemy;
-                    }
-                    if let Ok(grandchildren) = children_query.get(mc) {
-                        for &gc in grandchildren {
-                            if try_replay_attack(&mut animation_query, gc) {
-                                break 'enemy;
-                            }
-                        }
-                    }
-                }
-            }
+        if anim_timer.timer.just_finished() {
+            anim_state.request_replay();
         }
     }
-}
-
-fn try_replay_attack(
-    animation_query: &mut Query<
-        (&EnemyAnimations, &mut AnimationPlayer, &mut AnimationTransitions),
-        With<EnemyAnimationSetupComplete>
-    >,
-    entity: Entity,
-) -> bool {
-    let Ok((animations, mut player, mut transitions)) = animation_query.get_mut(entity) else {
-        return false;
-    };
-
-    transitions.play(&mut player, animations.attack, Duration::from_millis(150));
-
-    true
 }
 
 /// Система: тикает таймер крика при спавне, по завершении переводит в Idle

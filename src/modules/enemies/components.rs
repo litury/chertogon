@@ -65,15 +65,66 @@ pub struct EnemyAnimations {
 #[reflect(Component)]
 pub struct EnemyAnimationSetupComplete;
 
-/// Состояние анимации врага
+/// Кэш Entity AnimationPlayer — избегаем обход иерархии каждый кадр.
+/// Заполняется один раз в setup_enemy_animation.
+#[derive(Component)]
+pub struct CachedAnimPlayer {
+    pub entity: Entity,
+}
+
+/// LOD уровень врага (обновляется по дистанции до игрока)
+#[derive(Component, Reflect, Clone, Copy, PartialEq, Eq, Default)]
+#[reflect(Component)]
+pub enum EnemyLod {
+    #[default]
+    Full,      // <15м: полная анимация, ground circle, всё включено
+    Reduced,   // 15-25м: ground circle скрыт
+    Minimal,   // >25м: анимация заморожена + circle скрыт
+}
+
+/// Кэш последнего применённого speed_factor анимации.
+/// Обновляем set_speed() только при изменении > 5% (экономим change detection).
+#[derive(Component, Default)]
+pub struct CachedAnimSpeed {
+    pub last_factor: f32,
+}
+
+/// Состояние анимации врага.
+/// Системы только меняют `current`, центральная система обрабатывает переходы.
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub struct EnemyAnimState {
     pub current: EnemyAnim,
+    /// Последняя применённая анимация — защита от self-transitions (Bevy #13910).
+    /// None = "грязное" состояние, нужен переход (используется для replay атаки).
+    #[reflect(ignore)]
+    previous: Option<EnemyAnim>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Reflect)]
+impl EnemyAnimState {
+    pub fn new(initial: EnemyAnim) -> Self {
+        Self { current: initial, previous: Some(initial) }
+    }
+
+    /// Есть ли новый переход для применения
+    pub fn needs_transition(&self) -> bool {
+        self.previous != Some(self.current)
+    }
+
+    /// Отметить текущий переход как применённый
+    pub fn mark_applied(&mut self) {
+        self.previous = Some(self.current);
+    }
+
+    /// Форсировать повторный переход (для replay атаки)
+    pub fn request_replay(&mut self) {
+        self.previous = None;
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Reflect)]
 pub enum EnemyAnim {
+    #[default]
     Idle,
     Walking,
     Running,
@@ -116,6 +167,8 @@ pub struct ChasePlayer {
     pub speed: f32,
     pub aggro_range: f32,
     pub attack_range: f32,
+    /// Скорость движения, при которой walk-анимация выглядит натурально при 1.0x
+    pub anim_base_speed: f32,
 }
 
 impl Default for ChasePlayer {
@@ -124,6 +177,7 @@ impl Default for ChasePlayer {
             speed: 3.0,
             aggro_range: 30.0,
             attack_range: 2.0,
+            anim_base_speed: 3.0,
         }
     }
 }

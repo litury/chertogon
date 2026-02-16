@@ -14,3 +14,5 @@ pub mod separation;
 pub mod attack_slots;
 pub mod portal_spawn;
 pub mod portal_vfx;
+pub mod debug_spawn;
+pub mod lod;
