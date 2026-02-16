@@ -41,20 +41,23 @@ pub fn setup_loading_screen(
         asset_paths::UPYR_MODEL,
         asset_paths::LESHIY_MODEL,
         asset_paths::VOLKOLAK_MODEL,
-        asset_paths::WALL_PANEL,
-        asset_paths::TORCH,
+        asset_paths::CLIFF_WALL_A,
+        asset_paths::CLIFF_WALL_B,
+        asset_paths::CLIFF_WALL_C,
+        asset_paths::RUNE_STONE,
+        asset_paths::ROCK_LARGE,
+        asset_paths::DEAD_TREE,
+        asset_paths::BONE_PILE,
     ];
     for path in glb_paths {
         let h: Handle<Scene> = asset_server.load(*path);
         handles.push(h.untyped());
     }
 
-    // Текстуры пола
+    // Текстуры
     let texture_paths: &[&str] = &[
         asset_paths::FLOOR_DIFF,
         asset_paths::FLOOR_NORMAL,
-        asset_paths::FLOOR_ROUGH,
-        asset_paths::FOG_NOISE,
         asset_paths::GAMEOVER_BG,
         asset_paths::PORTRAIT_BOGATYR,
         asset_paths::PORTRAIT_UPYR,
@@ -198,7 +201,7 @@ pub fn update_loading_progress(
 /// Очищает UI загрузки
 pub fn cleanup_loading_screen(
     mut commands: Commands,
-    query: Query<Entity, With<LoadingScreenUI>>,
+    query: Query<Entity, (With<LoadingScreenUI>, Without<ChildOf>)>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn();

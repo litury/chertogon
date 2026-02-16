@@ -142,6 +142,7 @@ pub fn spawn_player(
             material_handle: cd_material,
             last_fraction: -1.0,
             last_facing: 0.0,
+            last_alpha: 0.0,
         },
     )).id();
 

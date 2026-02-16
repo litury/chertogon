@@ -1,9 +1,10 @@
 use bevy::prelude::*;
-use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::asset::RenderAssetUsages;
 use crate::modules::enemies::components::{Enemy, Health, EnemyDying, EnemyModel};
 use crate::modules::player::components::{Player, PlayerModel};
 use crate::modules::combat::components::{PlayerHealth, AttackCooldown};
+use crate::modules::selection::components::Selected;
 
 /// Ground ring — HP-бар в виде дуги + индикатор направления.
 /// Дуга сжимается с потерей HP (разрыв сзади = куда бить).
@@ -33,6 +34,8 @@ pub struct CooldownRing {
     pub last_fraction: f32,
     /// Направление (синхронизируется с PlayerModel)
     pub last_facing: f32,
+    /// Последнее значение alpha (избегаем materials.get_mut() каждый кадр)
+    pub last_alpha: f32,
 }
 
 /// HP-дуга + направление: обновляет меш и вращение кольца
@@ -89,13 +92,12 @@ fn update_ring(
             circle.last_facing = angle;
         }
 
-        // Обновляем меш только когда HP реально изменился
-        if (circle.last_hp_fraction - hp_pct).abs() > 0.005 {
+        // Обновляем меш только когда HP заметно изменился (порог 0.02 вместо 0.005)
+        if (circle.last_hp_fraction - hp_pct).abs() > 0.02 {
             circle.last_hp_fraction = hp_pct;
-            // min 5% видимой дуги (чтобы было видно при почти 0 HP), max 95% (всегда есть зазор для направления)
             let fraction = hp_pct * 0.90 + 0.05;
             if let Some(mesh) = meshes.get_mut(&mesh3d.0) {
-                *mesh = create_annular_arc(circle.inner_radius, circle.outer_radius, fraction, 32);
+                update_arc_positions_inplace(mesh, circle.inner_radius, circle.outer_radius, fraction, 32);
             }
         }
 
@@ -147,12 +149,11 @@ pub fn cooldown_ring_system(
         ring.last_facing = facing;
 
         // Обновляем меш при заметном изменении fraction
-        if (ring.last_fraction - cd_fraction).abs() > 0.01 {
+        if (ring.last_fraction - cd_fraction).abs() > 0.02 {
             ring.last_fraction = cd_fraction;
-            // Полное кольцо = 95% окружности (как HP ring, gap сзади)
             let arc_fraction = cd_fraction * 0.90 + 0.05;
             if let Some(mesh) = meshes.get_mut(&mesh3d.0) {
-                *mesh = create_annular_arc(ring.inner_radius, ring.outer_radius, arc_fraction, 24);
+                update_arc_positions_inplace(mesh, ring.inner_radius, ring.outer_radius, arc_fraction, 24);
             }
         }
 
@@ -168,16 +169,48 @@ pub fn cooldown_ring_system(
         } else {
             0.35 + cd_fraction * 0.25 // Растёт с прогрессом кулдауна
         };
-        if let Some(mat) = materials.get_mut(&ring.material_handle) {
-            mat.base_color = mat.base_color.with_alpha(alpha);
+        if (alpha - ring.last_alpha).abs() > 0.02 {
+            ring.last_alpha = alpha;
+            if let Some(mat) = materials.get_mut(&ring.material_handle) {
+                mat.base_color = mat.base_color.with_alpha(alpha);
+            }
         }
     }
+}
+
+/// Обновляет позиции вершин дуги in-place (0 аллокаций, если vertex count совпадает).
+/// Если меш ещё не был инициализирован (другой vertex count) — пересоздаёт целиком.
+fn update_arc_positions_inplace(mesh: &mut Mesh, inner_r: f32, outer_r: f32, fraction: f32, segments: u32) {
+    let half_angle = fraction * std::f32::consts::PI;
+    let center_angle = std::f32::consts::FRAC_PI_2;
+    let seg = segments.max(3);
+    let expected_verts = (seg as usize + 1) * 2;
+
+    // Пробуем мутировать позиции in-place
+    if let Some(VertexAttributeValues::Float32x3(positions)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        if positions.len() == expected_verts {
+            for i in 0..=seg {
+                let t = i as f32 / seg as f32;
+                let angle = center_angle - half_angle + t * 2.0 * half_angle;
+                let (sin, cos) = angle.sin_cos();
+                let idx = i as usize * 2;
+                positions[idx] = [inner_r * cos, inner_r * sin, 0.0];
+                positions[idx + 1] = [outer_r * cos, outer_r * sin, 0.0];
+            }
+            return;
+        }
+    }
+
+    // Fallback: vertex count не совпадает (первый вызов после Annulus) — полная пересборка
+    *mesh = create_annular_arc(inner_r, outer_r, fraction, segments);
 }
 
 /// Строит меш кольцевой дуги (annular arc) в XY плоскости.
 /// `fraction`: 0.0..1.0 — какая часть полного кольца видна.
 /// Дуга центрирована вокруг +Y оси (угол PI/2 от +X).
-fn create_annular_arc(inner_r: f32, outer_r: f32, fraction: f32, segments: u32) -> Mesh {
+pub fn create_annular_arc(inner_r: f32, outer_r: f32, fraction: f32, segments: u32) -> Mesh {
     let half_angle = fraction * std::f32::consts::PI;
     // Центр дуги на +Y (PI/2), чтобы после rotation_y + rotation_x лежала в нужном направлении
     let center_angle = std::f32::consts::FRAC_PI_2;
@@ -223,4 +256,51 @@ fn create_annular_arc(inner_r: f32, outer_r: f32, fraction: f32, segments: u32) 
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_indices(Indices::U32(indices))
+}
+
+/// Вспышка HP-кольца при выделении юнита (0.3с яркий → нормальный)
+#[derive(Component)]
+pub struct SelectionHighlight {
+    pub timer: Timer,
+    pub original_alpha: f32,
+}
+
+/// Добавляет вспышку HP-кольца при выделении
+pub fn selection_highlight_trigger(
+    mut commands: Commands,
+    selected_enemies: Query<&Children, (With<Enemy>, Added<Selected>)>,
+    selected_players: Query<&Children, (With<Player>, Added<Selected>)>,
+    circle_query: Query<(Entity, &GroundCircle)>,
+) {
+    for children in selected_enemies.iter().chain(selected_players.iter()) {
+        for child in children.iter() {
+            if let Ok((entity, circle)) = circle_query.get(child) {
+                commands.entity(entity).insert(SelectionHighlight {
+                    timer: Timer::from_seconds(0.3, TimerMode::Once),
+                    original_alpha: circle.base_alpha,
+                });
+            }
+        }
+    }
+}
+
+/// Анимирует вспышку: яркий → нормальный за 0.3с
+pub fn selection_highlight_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut SelectionHighlight, &mut GroundCircle)>,
+) {
+    for (entity, mut highlight, mut circle) in &mut query {
+        highlight.timer.tick(time.delta());
+        let t = highlight.timer.fraction(); // 0→1
+
+        // Lerp: bright (0.95) → original
+        let alpha = highlight.original_alpha + (0.95 - highlight.original_alpha) * (1.0 - t);
+        circle.base_alpha = alpha;
+
+        if highlight.timer.is_finished() {
+            circle.base_alpha = highlight.original_alpha;
+            commands.entity(entity).remove::<SelectionHighlight>();
+        }
+    }
 }
