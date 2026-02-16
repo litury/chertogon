@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::ui::UiScale;
-use crate::toolkit::asset_paths;
 
 /// Всплывающее число урона (UI-based, проецируется из 3D в экранные координаты)
 #[derive(Component)]
@@ -14,11 +13,11 @@ pub struct DamageNumber {
 /// Спавнит число урона как UI-элемент с абсолютной позицией
 pub fn spawn_damage_number(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    font: &Handle<Font>,
     position: Vec3,
     damage: f32,
 ) {
-    let font = asset_server.load(asset_paths::FONT_UI_BOLD);
+    let font = font.clone();
     let text = format!("-{}", damage as i32);
 
     // Детерминистичный X-разброс из позиции врага
@@ -60,10 +59,10 @@ pub fn spawn_damage_number(
 /// Спавнит текст "MISS" — промах (серый, мельче, та же анимация что damage number)
 pub fn spawn_miss_text(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    font: &Handle<Font>,
     position: Vec3,
 ) {
-    let font = asset_server.load(asset_paths::FONT_UI_BOLD);
+    let font = font.clone();
 
     let seed = (position.x * 73.7 + position.z * 31.3).sin();
     let x_spread = seed * 1.5;
@@ -119,11 +118,20 @@ pub fn damage_number_system(
         let vel = dmg.velocity;
         dmg.world_position += vel * dt;
 
-        // Проецируем 3D → экран (компенсация UiScale)
+        // Проецируем 3D → экран (компенсация UiScale, пишем только при сдвиге >0.5px)
         if let Ok(screen_pos) = camera.world_to_viewport(cam_transform, dmg.world_position) {
             *visibility = Visibility::Inherited;
-            node.left = Val::Px(screen_pos.x / scale);
-            node.top = Val::Px(screen_pos.y / scale);
+            let new_left = screen_pos.x / scale;
+            let new_top = screen_pos.y / scale;
+            let needs_update = match (node.left, node.top) {
+                (Val::Px(old_l), Val::Px(old_t)) =>
+                    (new_left - old_l).abs() > 0.5 || (new_top - old_t).abs() > 0.5,
+                _ => true,
+            };
+            if needs_update {
+                node.left = Val::Px(new_left);
+                node.top = Val::Px(new_top);
+            }
         } else {
             // За пределами экрана — убираем
             commands.entity(entity).despawn();

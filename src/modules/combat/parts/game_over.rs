@@ -6,10 +6,13 @@ use crate::modules::menu::parts::fade_transition::FadeState;
 use super::camera_shake::CameraShake;
 use super::damage_vignette::DamageVignette;
 
-/// Счётчик убийств за текущий раунд
+/// Счётчик убийств за текущий раунд (по типам для Game Over статистики)
 #[derive(Resource, Default)]
 pub struct KillCount {
     pub total: u32,
+    pub upyr: u32,
+    pub leshiy: u32,
+    pub volkolak: u32,
 }
 
 /// Проверяет смерть игрока → fade-переход в GameOver

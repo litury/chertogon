@@ -21,7 +21,6 @@ pub fn enemy_contact_damage_system(
     mut vignette: ResMut<DamageVignette>,
     mut camera_shake: ResMut<CameraShake>,
     vfx_assets: Res<HitVfxAssets>,
-    asset_server: Res<AssetServer>,
 ) {
     let Ok((player_entity, player_tf, mut player_health, mut state, mut velocity, children, has_stagger_cooldown)) = player.single_mut() else { return };
     let player_pos = player_tf.translation;
@@ -36,7 +35,7 @@ pub fn enemy_contact_damage_system(
                 let distance = (player_pos - enemy_tf.translation).length();
                 if distance > attack_cd.max_range {
                     damage_numbers::spawn_miss_text(
-                        &mut commands, &asset_server,
+                        &mut commands, &vfx_assets.font,
                         player_pos,
                     );
                     attack_cd.timer.reset();

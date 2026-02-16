@@ -1,48 +1,41 @@
 use bevy::prelude::*;
+use super::vfx_assets::HitVfxAssets;
 
-/// Кратковременная вспышка света в точке удара
+/// Кратковременная вспышка в точке удара (emissive mesh вместо PointLight)
 #[derive(Component)]
 pub struct ImpactFlash {
     pub timer: Timer,
-    pub initial_intensity: f32,
 }
 
-/// Спавнит яркий point light на 0.1с в точке удара
+/// Спавнит яркую emissive сферу на 0.1с в точке удара
 pub fn spawn_impact_flash(
     commands: &mut Commands,
+    vfx_assets: &HitVfxAssets,
     hit_pos: Vec3,
 ) {
-    let intensity = 5000.0;
-
     commands.spawn((
-        PointLight {
-            color: Color::srgb(1.0, 0.7, 0.3),
-            intensity,
-            range: 4.0,
-            shadows_enabled: false,
-            ..default()
-        },
+        Mesh3d(vfx_assets.flash_mesh.clone()),
+        MeshMaterial3d(vfx_assets.flash_material.clone()),
         Transform::from_translation(hit_pos + Vec3::Y * 1.0),
         ImpactFlash {
             timer: Timer::from_seconds(0.1, TimerMode::Once),
-            initial_intensity: intensity,
         },
     ));
 }
 
-/// Затухание и despawn вспышки света
+/// Быстрое затухание через scale и despawn
 pub fn impact_flash_system(
     time: Res<Time>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut ImpactFlash, &mut PointLight)>,
+    mut query: Query<(Entity, &mut ImpactFlash, &mut Transform)>,
 ) {
-    for (entity, mut flash, mut light) in &mut query {
+    for (entity, mut flash, mut transform) in &mut query {
         flash.timer.tick(time.delta());
 
         let progress = flash.timer.fraction();
-        // Быстрое квадратичное затухание
+        // Быстрое квадратичное затухание через scale (дешёвая Transform мутация)
         let fade = (1.0 - progress) * (1.0 - progress);
-        light.intensity = flash.initial_intensity * fade;
+        transform.scale = Vec3::splat(fade.max(0.01));
 
         if flash.timer.is_finished() {
             commands.entity(entity).despawn();

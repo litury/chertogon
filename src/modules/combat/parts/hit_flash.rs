@@ -7,6 +7,8 @@ pub struct HitFlash {
     pub timer: Timer,
     /// Emissive уже выставлен (set-once оптимизация)
     pub emissive_applied: bool,
+    /// Кэш entity потомков с материалами (заполняется при первом обходе, переиспользуется при reset)
+    pub cached_descendants: Vec<Entity>,
 }
 
 impl HitFlash {
@@ -14,6 +16,7 @@ impl HitFlash {
         Self {
             timer: Timer::from_seconds(0.12, TimerMode::Once),
             emissive_applied: false,
+            cached_descendants: Vec::new(),
         }
     }
 }
@@ -44,19 +47,26 @@ pub fn hit_flash_system(
         };
         transform.scale = Vec3::splat(scale_factor);
 
-        // Emissive flash: выставляем ОДИН РАЗ при первом тике
+        // Emissive flash: выставляем ОДИН РАЗ при первом тике + кэшируем потомков
         if !flash.emissive_applied {
             flash.emissive_applied = true;
             let flash_color = LinearRgba::new(8.0, 6.0, 3.0, 1.0);
             for descendant in children_query.iter_descendants(entity) {
-                if let Ok(mat_handle) = mesh_stylized.get(descendant) {
+                let has_material = if let Ok(mat_handle) = mesh_stylized.get(descendant) {
                     if let Some(material) = stylized_materials.get_mut(&mat_handle.0) {
                         material.base.emissive = flash_color;
                     }
+                    true
                 } else if let Ok(mat_handle) = mesh_standard.get(descendant) {
                     if let Some(material) = standard_materials.get_mut(&mat_handle.0) {
                         material.emissive = flash_color;
                     }
+                    true
+                } else {
+                    false
+                };
+                if has_material {
+                    flash.cached_descendants.push(descendant);
                 }
             }
         }
@@ -64,8 +74,8 @@ pub fn hit_flash_system(
         if flash.timer.is_finished() {
             transform.scale = Vec3::ONE;
 
-            // Сброс emissive ОДИН РАЗ при завершении
-            for descendant in children_query.iter_descendants(entity) {
+            // Сброс emissive ОДИН РАЗ при завершении — используем кэш вместо DFS
+            for &descendant in &flash.cached_descendants {
                 if let Ok(mat_handle) = mesh_stylized.get(descendant) {
                     if let Some(material) = stylized_materials.get_mut(&mat_handle.0) {
                         material.base.emissive = LinearRgba::BLACK;

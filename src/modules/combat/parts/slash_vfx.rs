@@ -11,17 +11,24 @@ const SLASH_FRAMES: [&str; 6] = [
     "textures/vfx/slash/Alternative_3_06.png",
 ];
 
-/// Кэшированные ассеты для slash VFX — shared mesh + preloaded текстуры
+/// Размер пула материалов (одновременно живёт max 2-3 slash, пул с запасом)
+const MATERIAL_POOL_SIZE: usize = 4;
+
+/// Кэшированные ассеты для slash VFX — shared mesh + preloaded текстуры + material pool
 #[derive(Resource)]
 pub struct SlashVfxAssets {
     pub mesh: Handle<Mesh>,
     pub frames: [Handle<Image>; 6],
+    /// Pre-allocated материалы — round-robin переиспользование
+    pub material_pool: [Handle<StandardMaterial>; MATERIAL_POOL_SIZE],
+    pub next_index: usize,
 }
 
 /// Инициализация slash ассетов при старте раунда
 pub fn init_slash_vfx_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
     let mesh = meshes.add(Plane3d::default().mesh().size(1.7, 2.0));
@@ -33,7 +40,29 @@ pub fn init_slash_vfx_assets(
         asset_server.load(SLASH_FRAMES[4]),
         asset_server.load(SLASH_FRAMES[5]),
     ];
-    commands.insert_resource(SlashVfxAssets { mesh, frames });
+
+    // Pre-allocate пул материалов — избегаем materials.add() на каждый удар
+    let make_material = |mats: &mut Assets<StandardMaterial>, texture: &Handle<Image>| {
+        mats.add(StandardMaterial {
+            base_color_texture: Some(texture.clone()),
+            base_color: Color::WHITE,
+            emissive: LinearRgba::new(5.0, 3.0, 0.5, 1.0),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        })
+    };
+
+    let material_pool = [
+        make_material(&mut materials, &frames[0]),
+        make_material(&mut materials, &frames[0]),
+        make_material(&mut materials, &frames[0]),
+        make_material(&mut materials, &frames[0]),
+    ];
+
+    commands.insert_resource(SlashVfxAssets { mesh, frames, material_pool, next_index: 0 });
 }
 
 /// Маркер slash-эффекта с покадровой анимацией
@@ -67,24 +96,23 @@ pub fn vfx_billboard_system(
 /// Спавнит slash VFX перед игроком в направлении врага
 pub fn spawn_slash(
     commands: &mut Commands,
-    slash_assets: &SlashVfxAssets,
+    slash_assets: &mut SlashVfxAssets,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     player_pos: Vec3,
     direction: Vec3,
 ) {
     let slash_pos = player_pos + direction * 0.8 + Vec3::Y * 0.8;
 
-    // Каждый slash получает свой material (нужен для per-instance fade out)
-    let material = materials.add(StandardMaterial {
-        base_color_texture: Some(slash_assets.frames[0].clone()),
-        base_color: Color::WHITE,
-        emissive: LinearRgba::new(5.0, 3.0, 0.5, 1.0),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        double_sided: true,
-        cull_mode: None,
-        ..default()
-    });
+    // Round-robin из pre-allocated пула — 0 GPU аллокаций
+    let material = slash_assets.material_pool[slash_assets.next_index % MATERIAL_POOL_SIZE].clone();
+    slash_assets.next_index = slash_assets.next_index.wrapping_add(1);
+
+    // Сбрасываем материал в начальное состояние
+    if let Some(mat) = materials.get_mut(&material) {
+        mat.base_color_texture = Some(slash_assets.frames[0].clone());
+        mat.base_color = Color::WHITE;
+        mat.emissive = LinearRgba::new(5.0, 3.0, 0.5, 1.0);
+    }
 
     commands.spawn((
         Mesh3d(slash_assets.mesh.clone()),

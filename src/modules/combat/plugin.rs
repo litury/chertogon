@@ -4,6 +4,7 @@ use crate::modules::combat::parts::{
     auto_attack, enemy_damage, camera_shake, slash_vfx, hit_particles,
     game_over, game_timer, knockback, hit_flash, damage_numbers,
     impact_flash, damage_vignette, vfx_assets, blood_decals, bloody_footprints,
+    haptic,
 };
 
 pub struct CombatPlugin;
@@ -15,6 +16,7 @@ impl Plugin for CombatPlugin {
             .init_resource::<game_over::KillCount>()
             .init_resource::<game_timer::GameTimer>()
             .init_resource::<damage_vignette::DamageVignette>()
+            .init_resource::<haptic::HapticState>()
             .add_systems(Update, (
                 auto_attack::player_auto_attack_system,
                 auto_attack::apply_pending_attack_system,
@@ -33,6 +35,7 @@ impl Plugin for CombatPlugin {
                 damage_numbers::damage_number_system,
                 damage_vignette::damage_vignette_decay_system,
                 damage_vignette::damage_vignette_apply_system,
+                haptic::haptic_feedback_system,
             ).run_if(in_state(GameState::Playing)))
             .add_systems(Update, (
                 blood_decals::footprint_decay_system,

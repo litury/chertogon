@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use crate::modules::player::components::Player;
 use crate::modules::enemies::components::{EnemyType, EnemyDying};
 use crate::modules::combat::components::PlayerHealth;
+use crate::modules::combat::parts::vfx_assets::HitVfxAssets;
 use crate::modules::progression::components::{XpOrb, HpOrb, PlayerXp};
 use crate::shared::rand_01;
-use crate::toolkit::asset_paths;
 use super::orb_assets::OrbAssets;
 
 // ── Спавн орбов при смерти врагов ──
@@ -78,7 +78,7 @@ pub fn xp_orb_physics_system(
     mut orbs: Query<(Entity, &mut XpOrb, &mut Transform), Without<Player>>,
     mut commands: Commands,
     mut xp_res: ResMut<PlayerXp>,
-    asset_server: Res<AssetServer>,
+    vfx_assets: Res<HitVfxAssets>,
 ) {
     let dt = time.delta_secs();
     if dt == 0.0 { return; } // Игра на паузе
@@ -118,7 +118,7 @@ pub fn xp_orb_physics_system(
             if dist < 0.8 {
                 xp_res.add_xp(orb.xp_value);
                 // Зелёный "+N XP" floating text
-                spawn_xp_text(&mut commands, &asset_server, player_pos, orb.xp_value);
+                spawn_xp_text(&mut commands, &vfx_assets.font, player_pos, orb.xp_value);
                 commands.entity(entity).despawn();
             }
         }
@@ -135,7 +135,7 @@ pub fn hp_orb_physics_system(
     mut player_health: Query<&mut PlayerHealth, With<Player>>,
     mut orbs: Query<(Entity, &mut HpOrb, &mut Transform), (Without<Player>, Without<XpOrb>)>,
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    vfx_assets: Res<HitVfxAssets>,
 ) {
     let dt = time.delta_secs();
     if dt == 0.0 { return; }
@@ -172,7 +172,7 @@ pub fn hp_orb_physics_system(
                 if let Ok(mut health) = player_health.single_mut() {
                     health.current = (health.current + orb.heal_amount).min(health.max);
                 }
-                spawn_heal_text(&mut commands, &asset_server, player_pos, orb.heal_amount);
+                spawn_heal_text(&mut commands, &vfx_assets.font, player_pos, orb.heal_amount);
                 commands.entity(entity).despawn();
             }
         }
@@ -205,13 +205,13 @@ pub fn reset_player_xp(mut player_xp: ResMut<PlayerXp>) {
 /// Зелёный "+N XP" текст (переиспользует паттерн DamageNumber)
 fn spawn_xp_text(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    font: &Handle<Font>,
     position: Vec3,
     xp_amount: f32,
 ) {
     use crate::modules::combat::parts::damage_numbers::DamageNumber;
 
-    let font = asset_server.load(asset_paths::FONT_UI_BOLD);
+    let font = font.clone();
     let text = format!("+{}", xp_amount as i32);
 
     let seed = (position.x * 73.7 + position.z * 31.3).sin();
@@ -248,13 +248,13 @@ fn spawn_xp_text(
 /// Зелёный "+N HP" текст
 fn spawn_heal_text(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    font: &Handle<Font>,
     position: Vec3,
     heal_amount: f32,
 ) {
     use crate::modules::combat::parts::damage_numbers::DamageNumber;
 
-    let font = asset_server.load(asset_paths::FONT_UI_BOLD);
+    let font = font.clone();
     let text = format!("+{} HP", heal_amount as i32);
 
     let seed = (position.x * 53.7 + position.z * 41.3).sin();

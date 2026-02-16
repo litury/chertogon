@@ -47,11 +47,16 @@ pub fn damage_vignette_apply_system(
     vignette: Res<DamageVignette>,
     mut camera_query: Query<&mut ColorGrading, With<Camera3d>>,
 ) {
+    // Ресурс не менялся → не трогаем ColorGrading (избегаем change detection каждый кадр)
+    if !vignette.is_changed() {
+        return;
+    }
+
     let Ok(mut grading) = camera_query.single_mut() else { return };
 
     if vignette.intensity <= 0.0 || vignette.elapsed >= vignette.duration {
         // Базовые значения (из Phase 1 setup_camera)
-        grading.global.exposure = 0.0;
+        grading.global.exposure = 0.2;
         grading.global.temperature = -0.05;
         grading.shadows.saturation = 0.9;
         return;
@@ -71,7 +76,7 @@ pub fn reset_color_grading(
     mut camera_query: Query<&mut ColorGrading, With<Camera3d>>,
 ) {
     let Ok(mut grading) = camera_query.single_mut() else { return };
-    grading.global.exposure = -0.15;
+    grading.global.exposure = 0.2;
     grading.global.temperature = -0.05;
     grading.shadows.saturation = 0.9;
 }

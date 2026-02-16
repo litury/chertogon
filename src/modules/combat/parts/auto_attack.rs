@@ -41,15 +41,16 @@ pub fn player_auto_attack_system(
 
     let player_pos = player_transform.translation;
 
-    // Ищем ближайшего ЖИВОГО врага в радиусе
+    // Ищем ближайшего ЖИВОГО врага в радиусе (length_squared — без sqrt)
+    let range_sq = weapon.range * weapon.range;
     let mut closest: Option<(Entity, f32, Vec3)> = None;
     for (entity, enemy_transform, health) in &enemies {
         if health.is_dead() { continue; }
         let enemy_pos = enemy_transform.translation;
-        let distance = (enemy_pos - player_pos).length();
-        if distance <= weapon.range {
-            if closest.is_none() || distance < closest.unwrap().1 {
-                closest = Some((entity, distance, enemy_pos));
+        let dist_sq = (enemy_pos - player_pos).length_squared();
+        if dist_sq <= range_sq {
+            if closest.is_none() || dist_sq < closest.unwrap().1 {
+                closest = Some((entity, dist_sq, enemy_pos));
             }
         }
     }
@@ -103,9 +104,8 @@ pub fn apply_pending_attack_system(
     mut camera_shake: ResMut<CameraShake>,
     vfx_assets: Res<HitVfxAssets>,
     blood_assets: Res<blood_decals::BloodDecalAssets>,
-    slash_assets: Res<slash_vfx::SlashVfxAssets>,
+    mut slash_assets: ResMut<slash_vfx::SlashVfxAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
     for (player_entity, player_transform, mut pending) in &mut player_query {
         pending.timer.tick(time.delta());
@@ -119,28 +119,29 @@ pub fn apply_pending_attack_system(
         // Наносим урон — проверяем что враг ещё жив и существует
         if let Ok((enemy_transform, mut health, mut velocity, children, mut anim_state)) = enemies.get_mut(pending.target) {
             let enemy_pos = enemy_transform.translation;
-            let distance = (enemy_pos - player_pos).length();
+            let dist_sq = (enemy_pos - player_pos).length_squared();
+            let max_range_sq = pending.max_range * pending.max_range;
 
-            if distance > pending.max_range {
+            if dist_sq > max_range_sq {
                 // MISS: враг увернулся — только slash VFX, без попадания
                 slash_vfx::spawn_slash(
-                    &mut commands, &slash_assets, &mut materials,
+                    &mut commands, &mut slash_assets, &mut materials,
                     player_pos, pending.direction,
                 );
                 damage_numbers::spawn_miss_text(
-                    &mut commands, &asset_server,
+                    &mut commands, &vfx_assets.font,
                     enemy_pos,
                 );
                 debug!(
-                    "⚔️ Player MISSES enemy! (distance {:.1} > max_range {:.1})",
-                    distance, pending.max_range
+                    "⚔️ Player MISSES enemy! (dist² {:.1} > max_range² {:.1})",
+                    dist_sq, max_range_sq
                 );
             } else if !health.is_dead() {
                 health.take_damage(pending.damage);
 
                 // VFX: Slash огненная дуга перед игроком
                 slash_vfx::spawn_slash(
-                    &mut commands, &slash_assets, &mut materials,
+                    &mut commands, &mut slash_assets, &mut materials,
                     player_pos, pending.direction,
                 );
 
@@ -150,9 +151,9 @@ pub fn apply_pending_attack_system(
                     enemy_pos,
                 );
 
-                // Impact flash — вспышка света в точке удара
+                // Impact flash — вспышка в точке удара (emissive mesh)
                 impact_flash::spawn_impact_flash(
-                    &mut commands,
+                    &mut commands, &vfx_assets,
                     enemy_pos,
                 );
 
@@ -164,8 +165,10 @@ pub fn apply_pending_attack_system(
                 velocity.0 = knockback_dir * 8.0;
                 commands.entity(pending.target).insert(Staggered::new(0.35));
 
-                // Hit reaction анимация
-                anim_state.current = EnemyAnim::HitReaction;
+                // Hit reaction анимация (guard: не перезаписывать если уже в HitReaction)
+                if anim_state.current != EnemyAnim::HitReaction {
+                    anim_state.current = EnemyAnim::HitReaction;
+                }
 
                 // Hit flash — scale-pop на модели врага (не на parent, чтобы круг не двигался)
                 for child in children.iter() {
@@ -177,7 +180,7 @@ pub fn apply_pending_attack_system(
 
                 // Damage number — всплывающее число урона
                 damage_numbers::spawn_damage_number(
-                    &mut commands, &asset_server,
+                    &mut commands, &vfx_assets.font,
                     enemy_pos, pending.damage,
                 );
 

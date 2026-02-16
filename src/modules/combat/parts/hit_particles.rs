@@ -15,14 +15,11 @@ pub fn spawn_hit_particles(
     vfx_assets: &HitVfxAssets,
     hit_pos: Vec3,
 ) {
-    // 6 частиц в случайных направлениях
+    // 3 частицы (было 6 — оптимизация: меньше entity churn при массовых боях)
     let directions = [
         Vec3::new(1.0, 2.0, 0.5),
         Vec3::new(-0.8, 1.5, 0.3),
         Vec3::new(0.3, 2.5, -0.7),
-        Vec3::new(-0.5, 1.8, -0.4),
-        Vec3::new(0.7, 1.2, 0.8),
-        Vec3::new(-0.3, 2.2, -0.6),
     ];
 
     for dir in directions {
