@@ -52,20 +52,20 @@ impl GameLayer {
     }
 
     /// Возвращает CollisionLayers для игрока
-    /// Коллайдирует с: Static, Enemy
+    /// Коллайдирует с: Static (проходит сквозь врагов — стандарт VS/action RPG)
     pub fn player_layers() -> CollisionLayers {
         CollisionLayers::new(
             [GameLayer::Player],
-            [GameLayer::Static, GameLayer::Enemy]
+            [GameLayer::Static]
         )
     }
 
     /// Возвращает CollisionLayers для врагов
-    /// Коллайдируют с: Static, Player, Enemy (враги не проходят друг через друга)
+    /// Коллайдируют с: Static (enemy_separation_system отталкивает через SpatialGrid)
     pub fn enemy_layers() -> CollisionLayers {
         CollisionLayers::new(
             [GameLayer::Enemy],
-            [GameLayer::Static, GameLayer::Player, GameLayer::Enemy]
+            [GameLayer::Static]
         )
     }
 }

@@ -33,7 +33,7 @@ pub fn configure_app(app: &mut App) {
         )
         .insert_resource(Gravity(Vec3::ZERO))  // ✅ ОТКЛЮЧАЕМ гравитацию - top-down игра!
         .insert_resource(ClearColor(Color::srgb(0.05, 0.04, 0.08)))  // Тьма за ареной (совпадает с туманом)
-        .insert_resource(SubstepCount(3))     // ✅ 3 подшага для точных коллизий на высоких скоростях
+        .insert_resource(SubstepCount(2))     // 2 подшага (-33% CPU физики, безопасно для цилиндров с damping 12.0)
         .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .init_state::<crate::shared::GameState>();
 

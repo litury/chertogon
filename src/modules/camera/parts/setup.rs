@@ -3,7 +3,6 @@ use bevy::anti_alias::fxaa::Fxaa;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::post_process::bloom::Bloom;
 use bevy::render::view::{ColorGrading, ColorGradingGlobal, ColorGradingSection};
-use bevy::light::ShadowFilteringMethod;
 use crate::shared::constants::{CAMERA_OFFSET_Y, CAMERA_OFFSET_Z};
 
 pub fn setup_camera(mut commands: Commands) {
@@ -22,7 +21,7 @@ pub fn setup_camera(mut commands: Commands) {
         // Color Grading — параметры tonemapping шейдера
         ColorGrading {
             global: ColorGradingGlobal {
-                exposure: 0.2,
+                exposure: 0.7,
                 temperature: -0.05,
                 post_saturation: 1.0,
                 ..default()
@@ -31,6 +30,11 @@ pub fn setup_camera(mut commands: Commands) {
                 saturation: 0.9,
                 contrast: 1.1,
                 lift: 0.04,
+                ..default()
+            },
+            midtones: ColorGradingSection {
+                contrast: 1.15,
+                saturation: 1.1,
                 ..default()
             },
             highlights: ColorGradingSection {
@@ -48,21 +52,6 @@ pub fn setup_camera(mut commands: Commands) {
             high_pass_frequency: 1.0,
             ..default()
         },
-
-        // Atmospheric Fog — затемнение дальних объектов
-        DistanceFog {
-            color: Color::srgb(0.10, 0.08, 0.15),
-            directional_light_color: Color::srgb(0.15, 0.12, 0.25),
-            directional_light_exponent: 12.0,
-            falloff: FogFalloff::from_visibility_colors(
-                80.0,
-                Color::srgb(0.14, 0.10, 0.20),
-                Color::srgb(0.08, 0.07, 0.14),
-            ),
-        },
-
-        // Мягкие тени (Gaussian 5×5 PCF, стиль Diablo 2)
-        ShadowFilteringMethod::Gaussian,
 
         Transform::from_xyz(0.0, CAMERA_OFFSET_Y, CAMERA_OFFSET_Z)
             .looking_at(Vec3::ZERO, Vec3::Y),
