@@ -59,3 +59,45 @@ pub struct XpBarFill;
 /// Маркер для текста уровня
 #[derive(Component)]
 pub struct LevelText;
+
+/// Контейнер для иконок апгрейдов (flex row под HP баром)
+#[derive(Component)]
+pub struct UpgradeBarContainer;
+
+/// Одна иконка апгрейда в баре
+#[derive(Component)]
+pub struct UpgradeIcon;
+
+/// Маркер индикатора на краю экрана (пул из 8 штук)
+#[derive(Component)]
+pub struct EdgeIndicator {
+    pub index: u8,
+}
+
+/// Контейнер для kill feed записей (правый край экрана)
+#[derive(Component)]
+pub struct KillFeedContainer;
+
+/// Одна запись kill feed с таймером fade-out, группировкой и slide-in
+#[derive(Component)]
+pub struct KillFeedEntry {
+    pub timer: Timer,
+    pub group_key: Option<String>,
+    pub count: u32,
+    pub base_color: Color,
+    pub slide_timer: f32,
+}
+
+/// Центральный баннер волны со fade-анимацией
+#[derive(Component)]
+pub struct WaveBanner {
+    pub timer: Timer,
+}
+
+/// Сообщение для kill feed (от разных систем: убийства, волны, апгрейды)
+#[derive(Message)]
+pub struct KillFeedMessage {
+    pub text: String,
+    pub color: Color,
+    pub group_key: Option<String>,
+}

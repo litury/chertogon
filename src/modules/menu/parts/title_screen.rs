@@ -260,7 +260,7 @@ pub fn remove_loading_overlay(
 /// Удаляет Title Screen UI
 pub fn cleanup_title_screen(
     mut commands: Commands,
-    query: Query<Entity, With<TitleScreenUI>>,
+    query: Query<Entity, (With<TitleScreenUI>, Without<ChildOf>)>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn();

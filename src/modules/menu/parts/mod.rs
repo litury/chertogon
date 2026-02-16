@@ -15,3 +15,8 @@ pub mod fade_transition;
 pub mod font_diagnostics;
 pub mod adaptive_scale;
 pub mod loading_screen;
+pub mod upgrade_bar;
+pub mod edge_indicators;
+pub mod kill_feed;
+pub mod wave_banner;
+pub mod minimap;

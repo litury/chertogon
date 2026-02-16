@@ -5,6 +5,8 @@ use crate::modules::menu::parts::fade_transition::FadeState;
 use crate::modules::combat::parts::game_over::KillCount;
 use crate::modules::combat::parts::game_timer::GameTimer;
 use crate::modules::enemies::components::WaveState;
+use crate::modules::progression::components::{PlayerXp, UpgradeInventory, UpgradeCategory};
+use crate::modules::progression::parts::upgrades;
 use crate::toolkit::asset_paths;
 
 /// Создаёт Game Over оверлей — кровавая виньетка поверх замёрзшей сцены
@@ -14,6 +16,8 @@ pub fn setup_game_over(
     kill_count: Res<KillCount>,
     wave_state: Res<WaveState>,
     game_timer: Res<GameTimer>,
+    player_xp: Res<PlayerXp>,
+    inventory: Res<UpgradeInventory>,
 ) {
     let font_title = asset_server.load(asset_paths::FONT_TITLE);
     let font_ui = asset_server.load(asset_paths::FONT_UI);
@@ -68,7 +72,8 @@ pub fn setup_game_over(
                 ..default()
             }),
         ));
-        // "ВЫ ПАЛИ В БОЮ" — кровавый с тёмной тенью для объёма
+
+        // "ВЫ ПАЛИ В БОЮ"
         parent.spawn((
             GameOverUI,
             Text::new("ВЫ ПАЛИ В БОЮ"),
@@ -84,73 +89,132 @@ pub fn setup_game_over(
             },
         ));
 
-        // Золотой разделитель (transparent → gold → transparent)
+        // Золотой разделитель
+        spawn_separator(parent);
+
+        // Волна + Время — одна строка
         parent.spawn((
             GameOverUI,
             Node {
-                width: Val::Px(220.0),
-                height: Val::Px(2.0),
-                margin: UiRect::vertical(Val::Px(6.0)),
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(32.0),
                 ..default()
             },
-            BackgroundGradient::from(LinearGradient {
-                angle: 90_f32.to_radians(),
-                stops: vec![
-                    Color::srgba(0.95, 0.7, 0.2, 0.0).into(),
-                    Color::srgba(0.95, 0.7, 0.2, 0.7).into(),
-                    Color::srgba(0.95, 0.7, 0.2, 0.0).into(),
-                ],
-                ..default()
-            }),
-        ));
+        )).with_children(|row| {
+            row.spawn((
+                GameOverUI,
+                Text::new(format!("Волна: {}", wave)),
+                TextFont { font: font_ui.clone(), font_size: 26.0, ..default() },
+                TextColor(Color::srgb(0.95, 0.7, 0.2)),
+                TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.7) },
+            ));
+            row.spawn((
+                GameOverUI,
+                Text::new(format!("Время: {}", time_str)),
+                TextFont { font: font_ui.clone(), font_size: 26.0, ..default() },
+                TextColor(Color::srgb(0.8, 0.75, 0.65)),
+                TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.7) },
+            ));
+        });
 
-        // Статистика: Волна
-        parent.spawn((
-            GameOverUI,
-            Text::new(format!("Волна: {}", wave)),
-            TextFont {
-                font: font_ui.clone(),
-                font_size: 26.0,
-                ..default()
-            },
-            TextColor(Color::srgb(0.95, 0.7, 0.2)),
-            TextShadow {
-                offset: Vec2::new(1.0, 1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.7),
-            },
-        ));
+        // Разделитель
+        spawn_separator(parent);
 
-        // Статистика: Время
-        parent.spawn((
-            GameOverUI,
-            Text::new(format!("Время: {}", time_str)),
-            TextFont {
-                font: font_ui.clone(),
-                font_size: 26.0,
-                ..default()
-            },
-            TextColor(Color::srgb(0.8, 0.75, 0.65)),
-            TextShadow {
-                offset: Vec2::new(1.0, 1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.7),
-            },
-        ));
-
-        // Статистика: Убийства
+        // Убито врагов: N
         parent.spawn((
             GameOverUI,
             Text::new(format!("Убито врагов: {}", kills)),
-            TextFont {
-                font: font_ui,
-                font_size: 26.0,
-                ..default()
-            },
+            TextFont { font: font_ui.clone(), font_size: 26.0, ..default() },
             TextColor(Color::srgb(0.8, 0.75, 0.65)),
-            TextShadow {
-                offset: Vec2::new(1.0, 1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.7),
-            },
+            TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.7) },
         ));
+
+        // Per-type breakdown (только если были убийства)
+        if kills > 0 {
+            parent.spawn((
+                GameOverUI,
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(16.0),
+                    ..default()
+                },
+            )).with_children(|row| {
+                let stats = [
+                    ("Упыри", kill_count.upyr),
+                    ("Лешие", kill_count.leshiy),
+                    ("Волколаки", kill_count.volkolak),
+                ];
+                for (name, count) in stats {
+                    if count > 0 {
+                        row.spawn((
+                            GameOverUI,
+                            Text::new(format!("{}: {}", name, count)),
+                            TextFont { font: font_ui.clone(), font_size: 20.0, ..default() },
+                            TextColor(Color::srgb(0.6, 0.55, 0.5)),
+                            TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.7) },
+                        ));
+                    }
+                }
+            });
+        }
+
+        // Разделитель
+        spawn_separator(parent);
+
+        // Уровень
+        parent.spawn((
+            GameOverUI,
+            Text::new(format!("Уровень: {}", player_xp.level)),
+            TextFont { font: font_ui, font_size: 26.0, ..default() },
+            TextColor(Color::srgb(0.95, 0.7, 0.2)),
+            TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.7) },
+        ));
+
+        // Иконки апгрейдов (если есть)
+        if !inventory.upgrades.is_empty() {
+            parent.spawn((
+                GameOverUI,
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    flex_wrap: FlexWrap::Wrap,
+                    column_gap: Val::Px(4.0),
+                    row_gap: Val::Px(4.0),
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+            )).with_children(|row| {
+                for &(upgrade_id, level) in &inventory.upgrades {
+                    let Some(def) = upgrades::get_upgrade_def(&upgrade_id) else { continue };
+                    let category_color = match def.category {
+                        UpgradeCategory::Attack => Color::srgb(0.9, 0.3, 0.2),
+                        UpgradeCategory::Defense => Color::srgb(0.3, 0.6, 0.9),
+                        UpgradeCategory::Path => Color::srgb(0.3, 0.9, 0.4),
+                    };
+                    row.spawn((
+                        GameOverUI,
+                        Node {
+                            width: Val::Px(28.0),
+                            height: Val::Px(28.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            border: UiRect::all(Val::Px(1.0)),
+                            border_radius: BorderRadius::all(Val::Px(4.0)),
+                            ..default()
+                        },
+                        BackgroundColor(category_color.with_alpha(0.7)),
+                        BorderColor::all(category_color),
+                    )).with_children(|icon| {
+                        icon.spawn((
+                            GameOverUI,
+                            Text::new(format!("{}", level)),
+                            TextFont { font: font_ui_bold.clone(), font_size: 14.0, ..default() },
+                            TextColor(Color::WHITE),
+                            TextShadow { offset: Vec2::new(1.0, 1.0), color: Color::srgba(0.0, 0.0, 0.0, 0.9) },
+                        ));
+                    });
+                }
+            });
+        }
 
         // Кнопки
         let btn_font = font_ui_bold.clone();
@@ -163,12 +227,10 @@ pub fn setup_game_over(
                 ..default()
             },
         )).with_children(|row| {
-            // "ЗАНОВО" — primary (gold)
             spawn_button(row, "ЗАНОВО", RestartButton, btn_font.clone(),
                 Color::srgb(0.95, 0.75, 0.3),
                 Color::srgba(0.95, 0.7, 0.2, 0.8),
             );
-            // "В МЕНЮ" — secondary (muted)
             spawn_button(row, "В МЕНЮ", MenuButton, btn_font,
                 Color::srgb(0.7, 0.65, 0.55),
                 Color::srgba(0.6, 0.55, 0.45, 0.5),
@@ -176,7 +238,30 @@ pub fn setup_game_over(
         });
     });
 
-    info!("Game Over screen: wave {}, kills {}, time {}", wave, kills, time_str);
+    info!("Game Over screen: wave {}, kills {} (upyr {}, leshiy {}, volkolak {}), level {}, time {}",
+        wave, kills, kill_count.upyr, kill_count.leshiy, kill_count.volkolak, player_xp.level, time_str);
+}
+
+/// Золотой разделитель (transparent → gold → transparent)
+fn spawn_separator(parent: &mut ChildSpawnerCommands) {
+    parent.spawn((
+        GameOverUI,
+        Node {
+            width: Val::Px(220.0),
+            height: Val::Px(2.0),
+            margin: UiRect::vertical(Val::Px(6.0)),
+            ..default()
+        },
+        BackgroundGradient::from(LinearGradient {
+            angle: 90_f32.to_radians(),
+            stops: vec![
+                Color::srgba(0.95, 0.7, 0.2, 0.0).into(),
+                Color::srgba(0.95, 0.7, 0.2, 0.7).into(),
+                Color::srgba(0.95, 0.7, 0.2, 0.0).into(),
+            ],
+            ..default()
+        }),
+    ));
 }
 
 fn spawn_button(
@@ -256,7 +341,7 @@ pub fn game_over_interaction(
 /// Удаляет Game Over UI
 pub fn cleanup_game_over(
     mut commands: Commands,
-    query: Query<Entity, With<GameOverUI>>,
+    query: Query<Entity, (With<GameOverUI>, Without<ChildOf>)>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn();

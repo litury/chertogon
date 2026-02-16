@@ -23,8 +23,8 @@ pub fn setup_fps(mut commands: Commands) {
         TextColor(Color::srgb(0.2, 0.9, 0.2)),
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Px(12.0),
-            top: Val::Px(12.0),
+            bottom: Val::Px(4.0),
+            right: Val::Px(8.0),
             ..default()
         },
     ));

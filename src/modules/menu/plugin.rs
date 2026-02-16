@@ -1,13 +1,16 @@
 use bevy::prelude::*;
 use crate::shared::GameState;
 use crate::modules::enemies::EnemyCoreSet;
-use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics, adaptive_scale, loading_screen};
+use super::parts::{title_screen, game_over_screen, hud, fps_counter, button_hover, fade_transition, font_diagnostics, adaptive_scale, loading_screen, upgrade_bar, kill_feed, wave_banner, minimap};
+use super::components;
 
 pub struct MenuPlugin;
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app
+            // Kill feed message type
+            .add_message::<components::KillFeedMessage>()
             // Диагностика загрузки шрифтов
             .add_systems(Startup, font_diagnostics::load_fonts)
             .add_systems(Update, font_diagnostics::check_font_loading)
@@ -29,9 +32,26 @@ impl Plugin for MenuPlugin {
                 .run_if(in_state(GameState::Loading)))
             .add_systems(OnExit(GameState::Loading), loading_screen::cleanup_loading_screen)
             // HUD
-            .add_systems(OnEnter(GameState::Playing), (hud::setup_hud, fps_counter::setup_fps))
-            .add_systems(Update, (hud::update_hud, hud::update_timer_text, hud::update_hp_bar, hud::update_xp_bar, fps_counter::update_fps).after(EnemyCoreSet).run_if(in_state(GameState::Playing)))
-            .add_systems(OnExit(GameState::Playing), (hud::cleanup_hud, fps_counter::cleanup_fps))
+            .add_systems(OnEnter(GameState::Playing), (
+                hud::setup_hud,
+                fps_counter::setup_fps,
+                minimap::setup_minimap,
+                kill_feed::setup_kill_feed,
+            ))
+            .add_systems(Update, (
+                hud::update_hud,
+                hud::update_timer_text,
+                hud::update_hp_bar,
+                hud::update_xp_bar,
+                fps_counter::update_fps,
+                upgrade_bar::update_upgrade_bar,
+                minimap::update_minimap,
+                kill_feed::consume_kill_feed_messages,
+                kill_feed::update_kill_feed,
+                wave_banner::spawn_wave_banner,
+                wave_banner::animate_wave_banner,
+            ).after(EnemyCoreSet).run_if(in_state(GameState::Playing)))
+            .add_systems(OnExit(GameState::Playing), (hud::cleanup_hud, fps_counter::cleanup_fps, minimap::cleanup_minimap))
             // Game Over
             .add_systems(OnEnter(GameState::GameOver), game_over_screen::setup_game_over)
             .add_systems(Update, game_over_screen::game_over_interaction

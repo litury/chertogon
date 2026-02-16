@@ -53,30 +53,53 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
             ));
 
-            // HP bar container
+            // HP bar container (overlay frame pattern)
             left.spawn((
                 HudUI,
                 Node {
-                    width: Val::Px(200.0),
-                    height: Val::Px(18.0),
-                    border: UiRect::all(Val::Px(1.0)),
-                    border_radius: BorderRadius::all(Val::Px(3.0)),
+                    width: Val::Px(220.0),
+                    height: Val::Px(36.0),
                     ..default()
                 },
-                BorderColor::all(Color::srgb(0.7, 0.5, 0.2)),
-                BackgroundColor(Color::srgba(0.1, 0.05, 0.05, 0.7)),
             )).with_children(|bar| {
-                // HP fill
+                // HP inner — область заливки внутри рамки
                 bar.spawn((
                     HudUI,
-                    HpBarFill,
                     Node {
-                        width: Val::Percent(100.0),
-                        height: Val::Percent(100.0),
-                        border_radius: BorderRadius::all(Val::Px(2.0)),
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(20.0),
+                        right: Val::Px(22.0),
+                        top: Val::Px(8.0),
+                        bottom: Val::Px(8.0),
+                        overflow: Overflow::clip(),
                         ..default()
                     },
-                    BackgroundColor(Color::srgb(0.8, 0.15, 0.1)),
+                )).with_children(|inner| {
+                    // HP fill
+                    inner.spawn((
+                        HudUI,
+                        HpBarFill,
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(100.0),
+                            border_radius: BorderRadius::all(Val::Px(2.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.8, 0.15, 0.1)),
+                    ));
+                });
+                // HP frame overlay — рамка поверх заливки
+                bar.spawn((
+                    HudUI,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(0.0),
+                        top: Val::Px(0.0),
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    ImageNode::new(asset_server.load(asset_paths::UI_HP_BAR_FRAME)),
                 ));
             });
 
@@ -96,15 +119,30 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                     color: Color::srgba(0.0, 0.0, 0.0, 0.9),
                 },
             ));
+
+            // Upgrade bar — иконки активных апгрейдов (заполняется при получении)
+            left.spawn((
+                HudUI,
+                UpgradeBarContainer,
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    flex_wrap: FlexWrap::Wrap,
+                    column_gap: Val::Px(4.0),
+                    row_gap: Val::Px(4.0),
+                    margin: UiRect::top(Val::Px(4.0)),
+                    ..default()
+                },
+            ));
         });
 
-        // Right column: Таймер + Убийства
+        // Right column: Таймер + Убийства (ниже миникарты)
         parent.spawn((
             HudUI,
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexEnd,
                 row_gap: Val::Px(4.0),
+                margin: UiRect::top(Val::Px(110.0)),
                 ..default()
             },
         )).with_children(|right| {
@@ -156,7 +194,57 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     )).with_children(|xp_root| {
-        // Текст уровня
+        // XP bar container (overlay frame pattern)
+        xp_root.spawn((
+            HudUI,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(28.0),
+                ..default()
+            },
+        )).with_children(|bar| {
+            // XP inner — область заливки внутри рамки
+            bar.spawn((
+                HudUI,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(13.0),
+                    right: Val::Percent(13.0),
+                    top: Val::Px(6.0),
+                    bottom: Val::Px(6.0),
+                    overflow: Overflow::clip(),
+                    ..default()
+                },
+            )).with_children(|inner| {
+                // XP fill
+                inner.spawn((
+                    HudUI,
+                    XpBarFill,
+                    Node {
+                        width: Val::Percent(0.0),
+                        height: Val::Percent(100.0),
+                        border_radius: BorderRadius::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.2, 0.8, 0.3)),
+                ));
+            });
+            // XP frame overlay — рамка поверх заливки
+            bar.spawn((
+                HudUI,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                ImageNode::new(asset_server.load(asset_paths::UI_XP_BAR_FRAME)),
+            ));
+        });
+
+        // Текст уровня (под баром)
         xp_root.spawn((
             HudUI,
             LevelText,
@@ -172,33 +260,6 @@ pub fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
                 color: Color::srgba(0.0, 0.0, 0.0, 0.9),
             },
         ));
-
-        // XP bar container
-        xp_root.spawn((
-            HudUI,
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Px(12.0),
-                border: UiRect::all(Val::Px(1.0)),
-                border_radius: BorderRadius::all(Val::Px(3.0)),
-                ..default()
-            },
-            BorderColor::all(Color::srgb(0.3, 0.6, 0.3)),
-            BackgroundColor(Color::srgba(0.05, 0.1, 0.05, 0.7)),
-        )).with_children(|bar| {
-            // XP fill
-            bar.spawn((
-                HudUI,
-                XpBarFill,
-                Node {
-                    width: Val::Percent(0.0),
-                    height: Val::Percent(100.0),
-                    border_radius: BorderRadius::all(Val::Px(2.0)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgb(0.2, 0.8, 0.3)),
-            ));
-        });
     });
 }
 
@@ -236,16 +297,13 @@ pub fn update_timer_text(
     }
 }
 
-/// Обновляет HP bar (ширина fill + текст)
+/// Обновляет HP bar (ширина fill + текст) — только при изменении HP
 pub fn update_hp_bar(
-    player_query: Query<&PlayerHealth, With<Player>>,
+    player_query: Query<&PlayerHealth, (With<Player>, Changed<PlayerHealth>)>,
     mut hp_fill: Query<&mut Node, (With<HpBarFill>, Without<HpBarText>)>,
     mut hp_text: Query<&mut Text, (With<HpBarText>, Without<HpBarFill>)>,
 ) {
-    let Ok(health) = player_query.single() else {
-        warn!("update_hp_bar: Player entity not found!");
-        return;
-    };
+    let Ok(health) = player_query.single() else { return };
     let fraction = (health.current / health.max).clamp(0.0, 1.0);
 
     for mut node in &mut hp_fill {
@@ -256,12 +314,13 @@ pub fn update_hp_bar(
     }
 }
 
-/// Обновляет XP bar (ширина fill + текст уровня)
+/// Обновляет XP bar (ширина fill + текст уровня) — только при изменении XP ресурса
 pub fn update_xp_bar(
     player_xp: Res<PlayerXp>,
     mut xp_fill: Query<&mut Node, (With<XpBarFill>, Without<LevelText>)>,
     mut level_text: Query<&mut Text, (With<LevelText>, Without<XpBarFill>)>,
 ) {
+    if !player_xp.is_changed() { return; }
     let fraction = (player_xp.current_xp / player_xp.xp_to_next).clamp(0.0, 1.0);
 
     for mut node in &mut xp_fill {
@@ -275,7 +334,7 @@ pub fn update_xp_bar(
 /// Удаляет HUD
 pub fn cleanup_hud(
     mut commands: Commands,
-    query: Query<Entity, With<HudUI>>,
+    query: Query<Entity, (With<HudUI>, Without<ChildOf>)>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn();
